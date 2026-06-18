@@ -28,7 +28,7 @@ if not exist "venv\Scripts\activate.bat" (
 )
 call venv\Scripts\activate.bat
 pip install -r requirements.txt --quiet
-pip install plotly feedparser fuzzywuzzy python-Levenshtein --quiet
+pip install newspaper3k lxml_html_clean feedparser trafilatura --quiet
 streamlit run app.py
 
 pause
