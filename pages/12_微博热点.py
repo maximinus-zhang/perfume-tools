@@ -139,7 +139,7 @@ with tab1:
                     st.caption(f"{item['hot_num']:,}")
             st.markdown("---")
     else:
-        st.info("点击"刷新热搜"获取最新榜单")
+        st.info('点击「刷新热搜」获取最新榜单')
 
 with tab2:
     st.subheader("🔍 搜索微博话题")

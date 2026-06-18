@@ -190,6 +190,6 @@ if 'all_hot' in st.session_state:
             else:
                 st.warning(f"{source} 暂无数据")
 else:
-    st.info("点击"刷新全部热搜"获取数据")
+    st.info('点击「刷新全部热搜」获取数据')
 
 st.caption(f"📊 数据来源: 百度/微博/知乎/抖音开放接口 | {datetime.now().strftime('%Y-%m-%d %H:%M')}")

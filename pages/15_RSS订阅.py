@@ -122,7 +122,7 @@ if st.session_state.rss_data:
         st.download_button("下载", csv, f"RSS订阅_{datetime.now().strftime('%Y%m%d')}.csv")
 else:
     # 首次加载
-    st.info("点击左侧"刷新全部"按钮获取最新资讯")
+    st.info('点击左侧「刷新全部」按钮获取最新资讯')
     
     # 预览订阅源
     st.markdown("### 📋 已配置的订阅源")

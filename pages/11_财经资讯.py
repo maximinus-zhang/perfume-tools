@@ -100,7 +100,7 @@ with tab1:
                 st.markdown(f"**{i}. {item['title']}**")
                 st.caption(f"🕐 {item['time']} | 📰 {item['source']}")
     else:
-        st.info("点击"刷新快讯"获取最新资讯")
+        st.info('点击「刷新快讯」获取最新资讯')
 
 with tab2:
     st.subheader("🔍 搜索行业关键词")
