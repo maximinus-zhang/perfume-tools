@@ -11,25 +11,14 @@ echo    🌴 一键推送代码 + 启动系统
 echo =======================================
 echo.
 
-:: === 第一步：自动推送 GitHub ===
-echo 🔄 正在检查 Git 变更...
+:: 推送到 GitHub（自动处理冲突）
 git add -A
-git status --short
+git commit -m "自动更新 %date% %time%"
 
-set /p confirm="是否推送以上变更到 GitHub？(Y/N): "
-if /i "%confirm%"=="Y" (
-    echo 📤 正在提交...
-    git commit -m "自动更新 %date% %time%"
-    echo 📤 正在推送...
-    git push
-    if errorlevel 1 (
-        echo ⚠️ 推送失败，请检查网络或 Git 配置
-    ) else (
-        echo ✅ 推送成功！Streamlit Cloud 将自动部署
-    )
-) else (
-    echo ⏭️ 跳过推送
-)
+:: 先拉取远程内容，再推送
+git pull origin main --allow-unrelated-histories --no-edit
+git push
+
 
 :: === 第二步：启动本地应用 ===
 echo.
