@@ -8,3 +8,4 @@ beautifulsoup4>=4.11
 altair>=5.0
 cloudscraper>=1.2
 fake-useragent>=1.4
+plotly>=5.18
