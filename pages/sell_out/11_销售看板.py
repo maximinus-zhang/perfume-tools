@@ -14,34 +14,31 @@ col4.metric("📈 同比增速", "+15.8%", "+3.2%")
 st.markdown("---")
 st.subheader("📌 模块快捷入口")
 
-cols = st.columns(4)
+cols = st.columns(3)
 with cols[0]:
     with st.container(border=True):
         st.markdown("#### 🏝️ 海南免税")
         st.metric("本月销售额", "¥8,520万")
-        st.page_link("pages/6_海南免税市场分析.py", label="进入 →", use_container_width=True)
+        st.markdown("👉 从左侧导航进入")
 with cols[1]:
     with st.container(border=True):
-        st.markdown("#### 🗺️ 门店覆盖")
+        st.markdown("#### 🗺️ 门店地图")
         st.metric("覆盖省份", "22 省")
-        st.page_link("pages/6_门店地图与品牌覆盖.py", label="进入 →", use_container_width=True)
+        st.markdown("👉 从左侧导航进入")
 with cols[2]:
     with st.container(border=True):
         st.markdown("#### ⚠️ 库存预警")
         st.metric("预警项", "23 项")
-        st.page_link("pages/10_库存预警.py", label="进入 →", use_container_width=True)
-with cols[3]:
-    with st.container(border=True):
-        st.markdown("#### 📈 销售趋势")
-        st.line_chart({"销售额": [120, 135, 148, 160, 175, 182]})
+        st.markdown("👉 从左侧导航进入")
 
 st.markdown("---")
+
+st.subheader("🏪 各门店销售排行")
 store_data = pd.DataFrame({
     "门店": ["三亚国际免税城", "海口国际免税城", "海口日月广场", "美兰机场", "凤凰机场", "海旅免税城"],
     "销售额(万)": [5200, 3800, 2100, 1500, 1200, 850],
     "环比(%)": [8.5, 6.2, 4.1, -2.3, 5.0, 3.5],
 })
-st.subheader("🏪 各门店销售排行")
 st.dataframe(store_data, use_container_width=True, hide_index=True)
 
 st.caption(f"📊 {datetime.now().strftime('%Y-%m-%d %H:%M')}")

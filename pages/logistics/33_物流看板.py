@@ -19,7 +19,7 @@ with cols[0]:
     with st.container(border=True):
         st.markdown("#### 📦 订单管理")
         st.metric("待处理订单", "15 单")
-        st.page_link("pages/9_订单管理.py", label="进入 →", use_container_width=True)
+        st.markdown("👉 从左侧导航进入")
 with cols[1]:
     with st.container(border=True):
         st.markdown("#### 🚚 物流时效")

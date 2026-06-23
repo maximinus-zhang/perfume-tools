@@ -19,7 +19,7 @@ with cols[0]:
     with st.container(border=True):
         st.markdown("#### ✅ 满足率分析")
         st.metric("本月满足率", "87.5%")
-        st.page_link("pages/4_满足率分析.py", label="进入 →", use_container_width=True)
+        st.markdown("👉 从左侧导航进入")
 with cols[1]:
     with st.container(border=True):
         st.markdown("#### 📊 采购趋势")
