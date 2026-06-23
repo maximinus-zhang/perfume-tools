@@ -1,4 +1,4 @@
-# app.py - 最简版
+# app.py
 import streamlit as st
 from datetime import datetime
 
@@ -13,23 +13,27 @@ st.set_page_config(
 # 🏪 Sell Out 模块
 # ============================================================
 sell_out = [
-    st.Page("pages/6_海南免税市场分析.py",    title="海南免税市场分析",    icon="🏝️"),
-    st.Page("pages/6_门店地图与品牌覆盖.py",  title="门店地图与品牌覆盖",  icon="🗺️"),
-    st.Page("pages/10_库存预警.py",           title="库存预警",           icon="⚠️"),
+    st.Page("pages/11_销售看板.py",        title="销售看板",        icon="📊"),
+    st.Page("pages/6_海南免税市场分析.py",  title="海南免税市场分析", icon="🏝️"),
+    st.Page("pages/7_门店地图分析.py",      title="门店地图分析",    icon="🗺️"),
+    st.Page("pages/10_库存预警.py",         title="库存预警",        icon="⚠️"),
 ]
 
 # ============================================================
 # 📦 Sell In 模块
 # ============================================================
 sell_in = [
-    st.Page("pages/4_满足率分析.py",          title="满足率分析",         icon="✅"),
+    st.Page("pages/22_采购看板.py",        title="采购看板",   icon="📋"),
+    st.Page("pages/4_满足率分析.py",       title="满足率分析", icon="✅"),
+    st.Page("pages/5_报表汇总.py",         title="报表汇总",   icon="📊"),
 ]
 
 # ============================================================
 # 🚚 物流模块
 # ============================================================
 logistics = [
-    st.Page("pages/9_订单管理.py",            title="订单管理",           icon="📦"),
+    st.Page("pages/33_物流看板.py",        title="物流看板",   icon="🚚"),
+    st.Page("pages/9_订单管理.py",         title="订单管理",   icon="📦"),
 ]
 
 # ============================================================
@@ -42,5 +46,6 @@ pg = st.navigation({
 })
 
 st.sidebar.title("🧭 功能导航")
+st.sidebar.markdown("---")
 
 pg.run()
