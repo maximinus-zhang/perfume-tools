@@ -273,69 +273,68 @@ if selected_brands:
 
 st.markdown("---")
 
-# ============================================================
-# 7. 中国地图（核心可视化）- ✨ 修复版
+# # ============================================================
+# 7. 中国地图（核心可视化）- ✨ 单Choropleth修复版
 # ============================================================
 st.subheader("📍 中国门店分布与品牌覆盖地图")
 
 fig_map = go.Figure()
 
-# ---- 7a. 灰色底色 ----
+# ---- 7a. 构建单层 Choropleth（z值区分颜色）----
 all_province_names = list(PROVINCE_EN.values())
+all_province_cn = list(PROVINCE_EN.keys())
+
+# 构建 z 值数组和 hover 文本
+z_values = []
+hover_texts = []
+
+for prov_cn in all_province_cn:
+    if selected_brands:
+        if prov_cn in covered_all:
+            z_values.append(1.0)  # 深橙 — 全部覆盖
+            hover_texts.append(f"🟠 {prov_cn} — 全部选中品牌均已覆盖")
+        elif prov_cn in union_all:
+            # 部分覆盖
+            brand_list = [b for b in selected_brands 
+                          if prov_cn in BRAND_COVERAGE.get(b, {}).get("provinces", [])]
+            z_values.append(0.5)  # 浅橙 — 部分覆盖
+            hover_texts.append(f"🟡 {prov_cn} — 部分覆盖 ({', '.join(brand_list)})")
+        else:
+            z_values.append(0.0)  # 灰色 — 无覆盖
+            hover_texts.append(f"⬜ {prov_cn} — 无品牌覆盖")
+    else:
+        z_values.append(0.0)
+        hover_texts.append(f"{prov_cn}")
+
 fig_map.add_trace(go.Choropleth(
     locations=all_province_names,
     locationmode="country names",
-    z=[0] * len(all_province_names),
-    text=[f"{cn}" for cn in PROVINCE_EN.keys()],
+    z=z_values,
+    text=hover_texts,
     hoverinfo="text",
     marker_line_color="#aaaaaa",
-    marker_line_width=0.5,
+    marker_line_width=0.8,
     showscale=False,
-    colorscale=[[0, "#f5f5f5"], [1, "#f5f5f5"]],
+    colorscale=[
+        [0.0, "#f0f0f0"],        # 灰色：无覆盖
+        [0.4, "#FFE0B2"],        # 过渡
+        [0.5, "#FFE0B2"],        # 浅橙：部分覆盖
+        [0.9, "#FFB300"],        # 过渡
+        [1.0, "#FFB300"],        # 深橙：全部覆盖
+    ],
     geo="geo"
 ))
 
-# ---- 7b. 品牌覆盖高亮 ----
-if selected_brands:
-    for prov_cn in covered_all:
-        prov_en = PROVINCE_EN.get(prov_cn, prov_cn)
-        fig_map.add_trace(go.Choropleth(
-            locations=[prov_en],
-            locationmode="country names",
-            z=[1],
-            text=f"✅ {prov_cn} — 全部选中品牌均已覆盖",
-            hoverinfo="text",
-            marker_line_color="#E65100",
-            marker_line_width=2.5,
-            showscale=False,
-            colorscale=[[0, "#FFB300"], [1, "#FFB300"]],
-            geo="geo",
-            visible=True
-        ))
-    
-    partial_provinces = union_all - covered_all
-    for prov_cn in partial_provinces:
-        prov_en = PROVINCE_EN.get(prov_cn, prov_cn)
-        brand_list = [b for b in selected_brands if prov_cn in BRAND_COVERAGE.get(b, {}).get("provinces", [])]
-        fig_map.add_trace(go.Choropleth(
-            locations=[prov_en],
-            locationmode="country names",
-            z=[0.5],
-            text=f"⚠️ {prov_cn} — 部分覆盖 ({', '.join(brand_list)})",
-            hoverinfo="text",
-            marker_line_color="#FF8F00",
-            marker_line_width=1.5,
-            showscale=False,
-            colorscale=[[0, "#FFE0B2"], [1, "#FFE0B2"]],
-            geo="geo",
-            visible=True
-        ))
-
-# ---- 7c. 门店标记（按类型分色，始终显示所有门店）----
-TYPE_COLORS = {"Airport": "#1E88E5", "DT": "#E53935", "Border": "#43A047", "Cruise": "#8E24AA"}
-TYPE_SYMBOLS = {"Airport": "diamond", "DT": "circle", "Border": "square", "Cruise": "triangle-up"}
+# ---- 7b. 门店标记（始终显示所有门店，按类型分色）----
+TYPE_STYLE = {
+    "Airport": {"color": "#1E88E5", "symbol": "diamond", "label": "机场店"},
+    "DT":      {"color": "#E53935", "symbol": "circle",  "label": "市区店"},
+    "Border":  {"color": "#43A047", "symbol": "square",  "label": "边境店"},
+    "Cruise":  {"color": "#8E24AA", "symbol": "triangle-up", "label": "游轮店"},
+}
 
 df_map_stores = df_filtered.copy()
+
 hover_texts = []
 marker_colors = []
 marker_symbols = []
@@ -354,8 +353,8 @@ for _, store in df_map_stores.iterrows():
         f"🏢 {store['operator']}<br>"
         f"🏷️ {store['type']} | {'✅' if store['status']=='Existing' else '🆕'}<br>{brand_info}"
     )
-    marker_colors.append(TYPE_COLORS.get(store["type"], "#999"))
-    marker_symbols.append(TYPE_SYMBOLS.get(store["type"], "circle"))
+    marker_colors.append(TYPE_STYLE.get(store["type"], {}).get("color", "#999"))
+    marker_symbols.append(TYPE_STYLE.get(store["type"], {}).get("symbol", "circle"))
     marker_sizes.append(11)
 
 fig_map.add_trace(go.Scattergeo(
@@ -369,12 +368,12 @@ fig_map.add_trace(go.Scattergeo(
         size=marker_sizes,
         color=marker_colors,
         line=dict(color="white", width=1.5),
-        opacity=0.85
+        opacity=0.9
     ),
     showlegend=False,
 ))
 
-# ---- 7d. 省份名称标注（不可见marker + text）----
+# ---- 7c. 省份名称标注 ---- 
 prov_labels, prov_lats, prov_lngs = [], [], []
 for prov_cn, center in PROVINCE_CENTERS.items():
     prov_labels.append(prov_cn)
@@ -386,12 +385,12 @@ fig_map.add_trace(go.Scattergeo(
     text=prov_labels,
     mode="markers+text",
     marker=dict(size=0.01, color="rgba(0,0,0,0)", opacity=0),
-    textfont=dict(size=13, color="#555555", family="Arial, sans-serif"),
+    textfont=dict(size=14, color="#444444", family="Arial, sans-serif"),
     textposition="middle center",
     hoverinfo="skip", showlegend=False,
 ))
 
-# ---- 7e. 城市名称标注（去重）----
+# ---- 7d. 城市名称标注（去重）----
 city_agg = df_map_stores.groupby(["city", "province"]).agg(
     lat=("lat", "mean"), lng=("lng", "mean"), store_count=("pos", "count")
 ).reset_index()
@@ -409,7 +408,7 @@ fig_map.add_trace(go.Scattergeo(
     hoverinfo="skip", showlegend=False,
 ))
 
-# ---- 7f. 布局 ----
+# ---- 7e. 地图布局 ----
 fig_map.update_layout(
     title=dict(
         text=f"TR 品牌门店中国分布图{' | 品牌: ' + ' + '.join(selected_brands) if selected_brands else ' | 全部门店'}",
@@ -427,7 +426,7 @@ fig_map.update_layout(
         center=dict(lat=33, lon=106),
         projection_scale=4.2,
         lonaxis=dict(range=[73, 136]),
-        lataxis=dict(range=[4, 56]),  # 包含港澳
+        lataxis=dict(range=[4, 56]),
     ),
     height=750,
     margin=dict(l=10, r=10, t=60, b=20),
@@ -436,16 +435,16 @@ fig_map.update_layout(
 
 st.plotly_chart(fig_map, use_container_width=True)
 
-# ---- 7g. 图例 ----
+# ---- 7f. 图例说明 ----
 lc1, lc2, lc3, lc4 = st.columns(4)
 lc1.markdown("🔵 **<span style='color:#1E88E5'>◆ 机场店</span>**", unsafe_allow_html=True)
 lc2.markdown("🔴 **<span style='color:#E53935'>● 市区店</span>**", unsafe_allow_html=True)
 lc3.markdown("🟢 **<span style='color:#43A047'>■ 边境店</span>**", unsafe_allow_html=True)
 lc4.markdown("🟣 **<span style='color:#8E24AA'>▲ 游轮店</span>**", unsafe_allow_html=True)
 if selected_brands:
-    st.caption("🟠 深色 = 全部覆盖 | 浅色 = 部分覆盖 | 灰色 = 无覆盖")
-
-# ============================================================
+    st.caption("🟠 深橙 = 全部覆盖 | 🟡 浅橙 = 部分覆盖 | ⬜ 灰色 = 无覆盖")
+# 
+============================================================
 # 8. 品牌覆盖区域详情表格
 # ============================================================
 if selected_brands:
