@@ -1,5 +1,4 @@
 import streamlit as st
-import os
 from datetime import datetime
 
 st.set_page_config(
@@ -10,7 +9,7 @@ st.set_page_config(
 )
 
 # ============================================================
-# 🏪 Sell Out 模块（手动定义顺序）
+# 🏪 Sell Out 模块
 # ============================================================
 sell_out = [
     st.Page("pages/sell_out/11_销售看板.py",        title="销售看板",        icon="📊"),
