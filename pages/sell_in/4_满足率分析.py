@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
 
-st.set_page_config(page_title="订单满足率分析", layout="wide")
 st.title("📊 订单满足率分析仪表板")
 
 # ---- 文件上传 ----

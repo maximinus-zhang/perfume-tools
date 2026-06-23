@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import random
 
-st.set_page_config(page_title="库存预警", layout="wide")
 st.title("📦 香水供应链·库存预警看板")
 
 # ============================================================

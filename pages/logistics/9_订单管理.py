@@ -6,7 +6,6 @@ import plotly.express as px
 import plotly.graph_objects as go
 import random
 
-st.set_page_config(page_title="订单管理", layout="wide")
 st.title("📋 香水供应链·订单管理看板")
 
 # ============================================================

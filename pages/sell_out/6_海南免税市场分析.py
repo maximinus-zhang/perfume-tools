@@ -12,8 +12,6 @@ import os
 from io import BytesIO
 import base64
 
-st.set_page_config(page_title="海南免税市场行情分析", layout="wide")
-
 DATA_DIR = "data/hainan_dutyfree"
 os.makedirs(DATA_DIR, exist_ok=True)
 

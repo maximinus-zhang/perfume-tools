@@ -6,8 +6,6 @@ from io import BytesIO
 import re
 import difflib
 
-st.set_page_config(page_title="报表汇总工具", layout="wide")
-
 # ---- [品牌映射、门店映射、辅助函数等与上一版本相同] ----
 BRAND_NORMALIZE = {
     '4711': '4711', '4711香水': '4711',
