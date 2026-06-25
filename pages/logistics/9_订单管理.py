@@ -20,37 +20,6 @@ with st.sidebar:
 # 模拟数据 / 真实数据可替换
 # ============================================================
 @st.cache_data(ttl=600)
-def load_orders():
-    """从 OSS 读取订单数据，不存在则生成示例数据"""
-    df_oss = read_excel_from_oss("logistics/order_data.xlsx")
-    
-    if not df_oss.empty:
-        # 使用上传的真实数据
-    
-    if not df_oss.empty:
-        # 使用上传的真实数据
-        df = df_oss.copy()
-        
-        # 确保列名正确
-        df.columns = [c.strip() for c in df.columns]
-        
-        # 计算总金额（如果为空）
-        if '总金额(USD)' not in df.columns or df['总金额(USD)'].isna().all():
-            df['总金额(USD)'] = df['数量'] * df['单价(USD)']
-        
-        # 计算交货延迟
-        df['交货延迟(天)'] = df.apply(
-            lambda r: max(0, (pd.to_datetime(r['实际交货']) - pd.to_datetime(r['预计交货'])).days)
-            if pd.notna(r.get('实际交货')) and str(r['实际交货']).strip() != '' else 0,
-            axis=1
-        )
-        
-        return df
-    else:
-        # 回退到示例数据
-        return generate_sample_orders(300)
-
-@st.cache_data(ttl=600)
 def generate_sample_orders(n=200):
     """生成示例订单数据（生产环境应替换为数据库/API）"""
     brands = ["CHANEL", "DIOR", "HERMES", "JO MALONE", "TOM FORD",
@@ -75,7 +44,7 @@ def generate_sample_orders(n=200):
             '门店': random.choice(stores),
             '数量': random.randint(1, 100),
             '单价(USD)': round(random.uniform(50, 500), 2),
-            '总金额(USD)': 0,  # 稍后计算
+            '总金额(USD)': 0,
             '下单日期': order_date.strftime('%Y-%m-%d'),
             '预计交货': estimated_delivery.strftime('%Y-%m-%d'),
             '实际交货': actual_delivery.strftime('%Y-%m-%d') if random.random() > 0.2 else '',
@@ -92,6 +61,59 @@ def generate_sample_orders(n=200):
         if r['实际交货'] else 0, axis=1
     )
     return df
+
+
+@st.cache_data(ttl=600)
+def load_orders():
+    """从 OSS 读取订单数据，不存在则生成示例数据"""
+    df_oss = read_excel_from_oss("logistics/order_data.xlsx")
+
+    if not df_oss.empty:
+        # 使用上传的真实数据
+        df = df_oss.copy()
+
+        # 清理列名：去除首尾空格
+        df.columns = [c.strip() for c in df.columns]
+
+        # 检查必要列是否存在
+        required_cols = ['订单号', '品牌', '数量', '单价(USD)', '下单日期', '预计交货', '状态']
+        missing = [c for c in required_cols if c not in df.columns]
+        if missing:
+            st.error(f"上传文件缺少必要列：{missing}，请检查模板格式")
+            return generate_sample_orders(300)
+
+        # 计算总金额（如果没有这一列或为空）
+        if '总金额(USD)' not in df.columns:
+            df['总金额(USD)'] = pd.to_numeric(df['数量'], errors='coerce') * pd.to_numeric(df['单价(USD)'], errors='coerce')
+        else:
+            df['总金额(USD)'] = df['总金额(USD)'].fillna(
+                pd.to_numeric(df['数量'], errors='coerce') * pd.to_numeric(df['单价(USD)'], errors='coerce')
+            )
+
+        # 确保日期列是字符串格式
+        for col in ['下单日期', '预计交货', '实际交货']:
+            if col in df.columns:
+                df[col] = df[col].astype(str)
+
+        # 计算交货延迟
+        df['交货延迟(天)'] = df.apply(
+            lambda r: max(0, (
+                pd.to_datetime(r['实际交货'], errors='coerce') -
+                pd.to_datetime(r['预计交货'], errors='coerce')
+            ).days) if pd.notna(r.get('实际交货')) and str(r['实际交货']).strip() not in ['', 'nan', 'NaT'] else 0,
+            axis=1
+        )
+
+        # 确保状态列存在
+        if '状态' not in df.columns:
+            df['状态'] = '已发货'
+
+        st.success("✅ 已加载上传的真实订单数据")
+        return df
+    else:
+        # 回退到示例数据
+        return generate_sample_orders(300)
+
 
 # ============================================================
 # 数据加载
