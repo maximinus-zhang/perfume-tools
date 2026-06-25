@@ -25,8 +25,7 @@ def upload_to_oss(file, remote_path: str):
 
 def read_excel_from_oss(remote_path: str, sheet_name: int = 0, prefix_filter: str = None) -> pd.DataFrame:
     """
-    从 OSS 读取 Excel 文件
-    
+    从 OSS 读取 Excel 文件，自动寻找数据表头
     参数：
         remote_path: OSS 中的文件路径
         sheet_name: Sheet 索引，0=第一个Sheet
@@ -35,24 +34,53 @@ def read_excel_from_oss(remote_path: str, sheet_name: int = 0, prefix_filter: st
     try:
         bucket = get_bucket()
         obj = bucket.get_object(remote_path)
-        df = pd.read_excel(BytesIO(obj.read()), sheet_name=sheet_name)
-
-        # 1. 去除全空行
+        
+        # 先读取全部数据（不指定 header），扫描找到真正的表头行
+        df_raw = pd.read_excel(BytesIO(obj.read()), sheet_name=sheet_name, header=None)
+        
+        # 去除全空行
+        df_raw = df_raw.dropna(how='all').reset_index(drop=True)
+        
+        if df_raw.empty:
+            return df_raw
+        
+        # 查找包含订单号/采购单号/品牌等关键字的行作为表头
+        header_row = None
+        keywords = ['订单号', '采购单号', '品牌', '产品类别', '门店', '供应商']
+        for i in range(min(30, len(df_raw))):
+            row_values = df_raw.iloc[i].astype(str).tolist()
+            for kw in keywords:
+                if any(kw in str(v) for v in row_values):
+                    header_row = i
+                    break
+            if header_row is not None:
+                break
+        
+        if header_row is None:
+            # 没找到表头，直接用第一行作为表头
+            header_row = 0
+        
+        # 重新读取，指定正确的表头行
+        obj2 = bucket.get_object(remote_path)
+        df = pd.read_excel(BytesIO(obj2.read()), sheet_name=sheet_name, header=header_row)
+        
+        # 去除全空行
         df = df.dropna(how='all').reset_index(drop=True)
-        # 2. 去除全空列
+        # 去除全空列
         df = df.dropna(axis=1, how='all')
-
-        if df.empty:
-            return df
-
-        # 3. 如果指定了前缀过滤，只保留有效数据行
-        if prefix_filter:
+        
+        # 清理列名中的空格
+        df.columns = [str(c).strip() for c in df.columns]
+        
+        # 如果指定了前缀过滤，只保留有效数据行
+        if prefix_filter and not df.empty:
             first_col = df.columns[0]
             df = df[df[first_col].astype(str).str.startswith(prefix_filter, na=False)]
             df = df.reset_index(drop=True)
-
+        
         return df
-    except Exception:
+    except Exception as e:
+        st.error(f"OSS 读取错误：{e}")
         return pd.DataFrame()
 
 def read_csv_from_oss(remote_path: str) -> pd.DataFrame:
@@ -60,7 +88,8 @@ def read_csv_from_oss(remote_path: str) -> pd.DataFrame:
         bucket = get_bucket()
         obj = bucket.get_object(remote_path)
         return pd.read_csv(BytesIO(obj.read()))
-    except Exception:
+    except Exception as e:
+        st.error(f"CSV 读取错误：{e}")
         return pd.DataFrame()
 
 def upload_section(remote_path: str, label: str = "上传数据文件"):
