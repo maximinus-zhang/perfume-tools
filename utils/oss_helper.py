@@ -23,23 +23,33 @@ def upload_to_oss(file, remote_path: str):
     bucket.put_object(remote_path, file.read())
     st.cache_data.clear()
 
-def read_excel_from_oss(remote_path: str, sheet_name: int = 1) -> pd.DataFrame:
-    """从 OSS 读取 Excel 文件，默认读取第二个 Sheet（索引 1），自动过滤空行和说明行"""
+def read_excel_from_oss(remote_path: str, sheet_name: int = 0, prefix_filter: str = None) -> pd.DataFrame:
+    """
+    从 OSS 读取 Excel 文件
+    
+    参数：
+        remote_path: OSS 中的文件路径
+        sheet_name: Sheet 索引，0=第一个Sheet
+        prefix_filter: 可选，只保留该前缀开头的行（如 'ORD-' 或 'PO-'）
+    """
     try:
         bucket = get_bucket()
         obj = bucket.get_object(remote_path)
         df = pd.read_excel(BytesIO(obj.read()), sheet_name=sheet_name)
 
-        # ===== 1. 去除全空行 =====
+        # 1. 去除全空行
         df = df.dropna(how='all').reset_index(drop=True)
-
-        # ===== 2. 去除全空列 =====
+        # 2. 去除全空列
         df = df.dropna(axis=1, how='all')
 
-        # ===== 3. 只保留以"PO-"开头的有效数据行（按第一列判断） =====
-        first_col = df.columns[0]
-        df = df[df[first_col].astype(str).str.startswith('PO-', na=False)]
-        df = df.reset_index(drop=True)
+        if df.empty:
+            return df
+
+        # 3. 如果指定了前缀过滤，只保留有效数据行
+        if prefix_filter:
+            first_col = df.columns[0]
+            df = df[df[first_col].astype(str).str.startswith(prefix_filter, na=False)]
+            df = df.reset_index(drop=True)
 
         return df
     except Exception:
