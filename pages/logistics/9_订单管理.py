@@ -20,53 +20,70 @@ with st.sidebar:
 # 模拟数据 / 真实数据可替换
 # ============================================================
 @st.cache_data(ttl=600)
-def generate_sample_orders(n=200):
-    """生成示例订单数据（生产环境应替换为数据库/API）"""
-    brands = ["CHANEL", "DIOR", "HERMES", "JO MALONE", "TOM FORD",
-              "GUCCI", "YSL", "ARMANI", "BVLGARI", "LOEWE"]
-    stores = ["三亚国际免税城", "海口国际免税城", "海口日月广场免税店",
-              "海口美兰机场免税店", "三亚凤凰机场免税店"]
-    statuses = ["已发货", "运输中", "已签收", "待处理"]
-    categories = ["香水EDP", "香水EDT", "古龙水", "旅行装", "礼盒套装"]
+def load_orders():
+    """从 OSS 读取订单数据，不存在则生成示例数据"""
+    # ===== 读取 Sheet 1（索引 0）= 订单数据主表 =====
+    df_oss = read_excel_from_oss("logistics/order_data.xlsx", sheet_name=0)
 
-    orders = []
-    base_date = datetime(2025, 6, 1)
+    if not df_oss.empty:
+        # 清理列名
+        df_oss.columns = [c.strip() for c in df_oss.columns]
 
-    for i in range(n):
-        order_date = base_date - timedelta(days=random.randint(0, 180))
-        estimated_delivery = order_date + timedelta(days=random.randint(3, 15))
-        actual_delivery = estimated_delivery + timedelta(days=random.randint(-2, 5))
+        # ===== 只保留以 ORD- 开头的有效订单行 =====
+        first_col = df_oss.columns[0]
+        df_oss = df_oss[df_oss[first_col].astype(str).str.startswith('ORD-', na=False)]
+        df_oss = df_oss.reset_index(drop=True)
 
-        orders.append({
-            '订单号': f'ORD-{202506:06d}-{i+1:04d}',
-            '品牌': random.choice(brands),
-            '产品类别': random.choice(categories),
-            '门店': random.choice(stores),
-            '数量': random.randint(1, 100),
-            '单价(USD)': round(random.uniform(50, 500), 2),
-            '总金额(USD)': 0,
-            '下单日期': order_date.strftime('%Y-%m-%d'),
-            '预计交货': estimated_delivery.strftime('%Y-%m-%d'),
-            '实际交货': actual_delivery.strftime('%Y-%m-%d') if random.random() > 0.2 else '',
-            '状态': random.choices(statuses, weights=[0.3, 0.3, 0.3, 0.1])[0],
-            '物流商': random.choice(['顺丰', '京东', '中通', '德邦']),
-            '运单号': f'SF{random.randint(1000000000, 9999999999)}',
-        })
+        if df_oss.empty:
+            st.warning("上传文件中没有找到以 ORD- 开头的有效订单数据")
+            return generate_sample_orders(300)
 
-    df = pd.DataFrame(orders)
-    df['总金额(USD)'] = df['数量'] * df['单价(USD)']
-    df['交货延迟(天)'] = df.apply(
-        lambda r: max(0, (datetime.strptime(r['实际交货'], '%Y-%m-%d') -
-                          datetime.strptime(r['预计交货'], '%Y-%m-%d')).days)
-        if r['实际交货'] else 0, axis=1
-    )
-    return df
+        # 检查必要列是否存在
+        required_cols = ['订单号', '品牌', '数量', '单价(USD)', '下单日期', '预计交货', '状态']
+        missing = [c for c in required_cols if c not in df_oss.columns]
+        if missing:
+            st.error(f"上传文件缺少必要列：{missing}，请检查模板格式")
+            return generate_sample_orders(300)
+
+        # 计算总金额
+        if '总金额(USD)' not in df_oss.columns:
+            df_oss['总金额(USD)'] = pd.to_numeric(df_oss['数量'], errors='coerce') * pd.to_numeric(df_oss['单价(USD)'], errors='coerce')
+        else:
+            df_oss['总金额(USD)'] = df_oss['总金额(USD)'].fillna(
+                pd.to_numeric(df_oss['数量'], errors='coerce') * pd.to_numeric(df_oss['单价(USD)'], errors='coerce')
+            )
+
+        # 确保日期列是字符串格式
+        for col in ['下单日期', '预计交货', '实际交货']:
+            if col in df_oss.columns:
+                df_oss[col] = df_oss[col].astype(str)
+
+        # 计算交货延迟
+        df_oss['交货延迟(天)'] = df_oss.apply(
+            lambda r: max(0, (
+                pd.to_datetime(r['实际交货'], errors='coerce') -
+                pd.to_datetime(r['预计交货'], errors='coerce')
+            ).days) if pd.notna(r.get('实际交货')) and str(r['实际交货']).strip() not in ['', 'nan', 'NaT'] else 0,
+            axis=1
+        )
+
+        # 确保状态列存在
+        if '状态' not in df_oss.columns:
+            df_oss['状态'] = '已发货'
+
+        st.success(f"✅ 已加载上传的真实订单数据（共 {len(df_oss)} 条）")
+        return df_oss
+    else:
+        # 回退到示例数据
+        st.info("📊 暂无上传数据，使用示例数据")
+        return generate_sample_orders(300)
+
 
 
 @st.cache_data(ttl=600)
 def load_orders():
     """从 OSS 读取订单数据，不存在则生成示例数据"""
-    df_oss = read_excel_from_oss("logistics/order_data.xlsx")
+    df_oss = read_excel_from_oss("logistics/order_data.xlsx", sheet_name=0)
 
     if not df_oss.empty:
         # 使用上传的真实数据
