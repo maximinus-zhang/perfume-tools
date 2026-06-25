@@ -5,12 +5,48 @@ from datetime import datetime, timedelta
 import plotly.express as px
 import plotly.graph_objects as go
 import random
+from utils.oss_helper import upload_section, read_excel_from_oss
 
 st.title("📋 香水供应链·订单管理看板")
 
 # ============================================================
+# 上传区域（侧边栏）
+# ============================================================
+with st.sidebar:
+    st.markdown("---")
+    upload_section("logistics/order_data.xlsx", "上传订单数据")
+
+# ============================================================
 # 模拟数据 / 真实数据可替换
 # ============================================================
+@st.cache_data(ttl=600)
+def load_orders():
+    """从 OSS 读取订单数据，不存在则生成示例数据"""
+    df_oss = read_excel_from_oss("logistics/order_data.xlsx")
+    
+    if not df_oss.empty:
+        # 使用上传的真实数据
+        df = df_oss.copy()
+        
+        # 确保列名正确
+        df.columns = [c.strip() for c in df.columns]
+        
+        # 计算总金额（如果为空）
+        if '总金额(USD)' not in df.columns or df['总金额(USD)'].isna().all():
+            df['总金额(USD)'] = df['数量'] * df['单价(USD)']
+        
+        # 计算交货延迟
+        df['交货延迟(天)'] = df.apply(
+            lambda r: max(0, (pd.to_datetime(r['实际交货']) - pd.to_datetime(r['预计交货'])).days)
+            if pd.notna(r.get('实际交货')) and str(r['实际交货']).strip() != '' else 0,
+            axis=1
+        )
+        
+        return df
+    else:
+        # 回退到示例数据
+        return generate_sample_orders(300)
+
 @st.cache_data(ttl=600)
 def generate_sample_orders(n=200):
     """生成示例订单数据（生产环境应替换为数据库/API）"""
@@ -57,7 +93,11 @@ def generate_sample_orders(n=200):
 # ============================================================
 # 数据加载
 # ============================================================
-df = generate_sample_orders(300)
+df = load_orders()
+
+# 数据来源提示
+data_source = "📤 使用上传数据" if not read_excel_from_oss("logistics/order_data.xlsx").empty else "📊 使用示例数据"
+st.caption(f"{data_source} | 上传文件可替换为真实订单")
 
 # ============================================================
 # 筛选器
@@ -227,4 +267,4 @@ with tab4:
         csv = filtered.to_csv(index=False, encoding='utf-8-sig').encode('utf-8')
         st.download_button("下载CSV", csv, f"订单数据_{datetime.now().strftime('%Y%m%d')}.csv")
 
-st.caption(f"📊 {datetime.now().strftime('%Y-%m-%d %H:%M')} | 数据来源：模拟数据（生产环境请接入真实API）")
+st.caption(f"📊 {datetime.now().strftime('%Y-%m-%d %H:%M')} | 数据来源：上传文件或示例数据")
