@@ -1,7 +1,15 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from utils.oss_helper import upload_section, read_excel_from_oss
 
+# ===== 上传区域（侧边栏） =====
+upload_section("sell_in/purchase_data.xlsx", "上传采购数据")
+
+# ===== 从 OSS 读取数据（如果存在） =====
+df_oss = read_excel_from_oss("sell_in/purchase_data.xlsx")
+
+# ===== 原有界面（保持不变） =====
 st.title("📦 Sell In · 采购总看板")
 st.markdown("---")
 
