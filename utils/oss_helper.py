@@ -24,24 +24,28 @@ def upload_to_oss(file, remote_path: str):
     st.cache_data.clear()
 
 def read_excel_from_oss(remote_path: str, sheet_name: int = 1) -> pd.DataFrame:
-    """从 OSS 读取 Excel 文件，默认读取第二个 Sheet（索引 1），自动去除空行空列"""
+    """从 OSS 读取 Excel 文件，默认读取第二个 Sheet（索引 1），自动过滤空行和说明行"""
     try:
         bucket = get_bucket()
         obj = bucket.get_object(remote_path)
         df = pd.read_excel(BytesIO(obj.read()), sheet_name=sheet_name)
 
-        # ===== 去除全空行 =====
+        # ===== 1. 去除全空行 =====
         df = df.dropna(how='all').reset_index(drop=True)
 
-        # ===== 去除全空列 =====
+        # ===== 2. 去除全空列 =====
         df = df.dropna(axis=1, how='all')
+
+        # ===== 3. 只保留以"PO-"开头的有效数据行（按第一列判断） =====
+        first_col = df.columns[0]
+        df = df[df[first_col].astype(str).str.startswith('PO-', na=False)]
+        df = df.reset_index(drop=True)
 
         return df
     except Exception:
         return pd.DataFrame()
 
 def read_csv_from_oss(remote_path: str) -> pd.DataFrame:
-    """从 OSS 读取 CSV 文件"""
     try:
         bucket = get_bucket()
         obj = bucket.get_object(remote_path)
@@ -50,7 +54,6 @@ def read_csv_from_oss(remote_path: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 def upload_section(remote_path: str, label: str = "上传数据文件"):
-    """通用上传组件"""
     with st.sidebar.expander(f"📤 {label}", expanded=False):
         uploaded = st.file_uploader(
             "选择 Excel/CSV 文件",
