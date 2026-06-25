@@ -23,12 +23,12 @@ def upload_to_oss(file, remote_path: str):
     bucket.put_object(remote_path, file.read())
     st.cache_data.clear()
 
-def read_excel_from_oss(remote_path: str, sheet_name: int = 0, prefix_filter: str = None) -> pd.DataFrame:
+def read_excel_from_oss(remote_path: str, sheet_name: int = 1, prefix_filter: str = None) -> pd.DataFrame:
     """
-    从 OSS 读取 Excel 文件，自动寻找数据表头
+    从 OSS 读取 Excel 文件，默认读取第二个 Sheet（索引 1），自动寻找数据表头
     参数：
         remote_path: OSS 中的文件路径
-        sheet_name: Sheet 索引，0=第一个Sheet
+        sheet_name: Sheet 索引，1=第二个Sheet（数据通常在这里）
         prefix_filter: 可选，只保留该前缀开头的行（如 'ORD-' 或 'PO-'）
     """
     try:
@@ -47,7 +47,7 @@ def read_excel_from_oss(remote_path: str, sheet_name: int = 0, prefix_filter: st
         # 查找包含订单号/采购单号/品牌等关键字的行作为表头
         header_row = None
         keywords = ['订单号', '采购单号', '品牌', '产品类别', '门店', '供应商']
-        for i in range(min(30, len(df_raw))):
+        for i in range(len(df_raw)):
             row_values = df_raw.iloc[i].astype(str).tolist()
             for kw in keywords:
                 if any(kw in str(v) for v in row_values):
@@ -57,7 +57,6 @@ def read_excel_from_oss(remote_path: str, sheet_name: int = 0, prefix_filter: st
                 break
         
         if header_row is None:
-            # 没找到表头，直接用第一行作为表头
             header_row = 0
         
         # 重新读取，指定正确的表头行
