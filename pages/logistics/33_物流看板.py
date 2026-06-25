@@ -6,7 +6,7 @@ from utils.oss_helper import read_excel_from_oss
 st.title("🚚 物流模块 · 物流总看板")
 
 # ===== 从 OSS 读取订单数据（与订单管理共用同一个文件） =====
-df_oss = read_excel_from_oss("logistics/order_data.xlsx")
+df_oss = read_excel_from_oss("logistics/order_data.xlsx"，, sheet_name=0)
 has_data = not df_oss.empty
 
 if has_data:
