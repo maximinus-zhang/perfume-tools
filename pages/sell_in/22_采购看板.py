@@ -3,13 +3,13 @@ import pandas as pd
 from datetime import datetime
 from utils.oss_helper import upload_section, read_excel_from_oss
 
-# ===== 上传区域 =====
+# ===== 上传区域（侧边栏） =====
 with st.sidebar:
     st.markdown("---")
     upload_section("sell_in/purchase_data.xlsx", "上传采购数据")
 
-# ===== 读取数据 =====
-df_oss = read_excel_from_oss("sell_in/purchase_data.xlsx")
+# ===== 从 OSS 读取数据（使用 prefix_filter 自动过滤非 PO- 开头的行） =====
+df_oss = read_excel_from_oss("sell_in/purchase_data.xlsx", sheet_name=0, prefix_filter='PO-')
 has_data = not df_oss.empty
 
 if has_data:
@@ -25,7 +25,6 @@ st.markdown("---")
 if has_data:
     total_orders = len(df_oss)
 
-    # 采购金额
     amount_col = None
     for col in df_oss.columns:
         if '金额' in col:
@@ -33,7 +32,6 @@ if has_data:
             break
     total_amount = df_oss[amount_col].sum() if amount_col else 38500000
 
-    # 满足率：直接从"满足率(%)"列读取平均值
     satisfy_col = None
     for col in df_oss.columns:
         if '满足' in col:
@@ -41,7 +39,6 @@ if has_data:
             break
 
     if satisfy_col:
-        # 直接取平均值（用户填的百分比数值）
         satisfy_values = pd.to_numeric(df_oss[satisfy_col], errors='coerce')
         if satisfy_values.notna().sum() > 0:
             satisfy_rate = satisfy_values.mean()
@@ -75,7 +72,7 @@ with cols[1]:
 
 st.markdown("---")
 
-# ===== 月度采购趋势（完全从上传数据读取） =====
+# ===== 月度采购趋势 =====
 st.subheader("📈 月度采购趋势")
 
 if has_data:
@@ -87,10 +84,8 @@ if has_data:
 
     if date_col and amount_col:
         df_temp = df_oss.copy()
-        # 处理 Excel 日期数字格式
         df_temp[date_col] = pd.to_numeric(df_temp[date_col], errors='coerce')
         df_temp[date_col] = pd.to_datetime(df_temp[date_col], origin='1899-12-30', unit='D', errors='coerce')
-        # 如果还是无效，尝试直接解析字符串
         df_temp[date_col] = df_temp[date_col].fillna(pd.to_datetime(df_oss[date_col], errors='coerce'))
 
         df_temp['月份'] = df_temp[date_col].dt.strftime('%Y-%m')
@@ -98,13 +93,10 @@ if has_data:
         monthly.columns = ['月份', '金额']
 
         if len(monthly) > 0:
-            # 按月份排序
             monthly = monthly.sort_values('月份')
             chart_data = monthly.set_index('月份')
-            # 金额转换为万
             chart_data['金额(万)'] = (chart_data['金额'] / 10000).round(0)
             st.line_chart(chart_data['金额(万)'])
-            # 显示数据表
             with st.expander("查看月度数据明细"):
                 st.dataframe(monthly, use_container_width=True, hide_index=True)
         else:

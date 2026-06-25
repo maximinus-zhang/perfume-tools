@@ -65,23 +65,14 @@ def generate_sample_orders(n=200):
 # ============================================================
 # 加载订单数据（优先从 OSS，不存在则用示例数据）
 # ============================================================
-@st.cache_data(ttl=600)
 def load_orders():
     """从 OSS 读取订单数据（Sheet 1），不存在则生成示例数据"""
-    df_oss = read_excel_from_oss("logistics/order_data.xlsx", sheet_name=0)
+    # 使用 prefix_filter 自动过滤非 ORD- 开头的行
+    df_oss = read_excel_from_oss("logistics/order_data.xlsx", sheet_name=0, prefix_filter='ORD-')
 
     if not df_oss.empty:
         df = df_oss.copy()
         df.columns = [c.strip() for c in df.columns]
-
-        # 只保留 ORD- 开头的有效订单行
-        first_col = df.columns[0]
-        df = df[df[first_col].astype(str).str.startswith('ORD-', na=False)]
-        df = df.reset_index(drop=True)
-
-        if df.empty:
-            st.info("上传文件中没有找到 ORD- 开头的订单数据，使用示例数据")
-            return generate_sample_orders(300)
 
         # 检查必要列
         required = ['订单号', '品牌', '数量', '单价(USD)', '下单日期', '预计交货', '状态']
@@ -167,7 +158,7 @@ col4.metric("⏱ 平均延迟(天)", f"{avg_delay:.1f}" if not pd.isna(avg_delay
 col5.metric("⚠️ 待处理", f"{pending_orders}", delta_color="inverse")
 
 # ============================================================
-# 图表（保持原有不变）
+# 图表
 # ============================================================
 tab1, tab2, tab3, tab4 = st.tabs(["📊 销售分析", "🏪 门店对比", "🚚 物流状态", "📋 订单明细"])
 
