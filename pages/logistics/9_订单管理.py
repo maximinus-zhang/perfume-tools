@@ -66,9 +66,10 @@ def generate_sample_orders(n=200):
 # 加载订单数据（优先从 OSS，不存在则用示例数据）
 # ============================================================
 def load_orders():
-    """从 OSS 读取订单数据（Sheet 1），不存在则生成示例数据"""
+    """从 OSS 读取订单数据（Sheet 2），不存在则生成示例数据"""
     # 使用 prefix_filter 自动过滤非 ORD- 开头的行
-    df_oss = read_excel_from_oss("logistics/order_data.xlsx", sheet_name=0, prefix_filter='ORD-')
+    # ⚠️ 数据在第二个 Sheet（索引 1），不是第一个 Sheet
+    df_oss = read_excel_from_oss("logistics/order_data.xlsx", sheet_name=1, prefix_filter='ORD-')
 
     if not df_oss.empty:
         df = df_oss.copy()
