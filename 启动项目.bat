@@ -1,34 +1,39 @@
 @echo off
 chcp 65001 >nul
-title 海南免税系统 - 推送+启动
+title Perfume Supply Chain - Push & Start
 color 0A
 
-cd /d "C:\Users\Maximinuszhang\Desktop\项目"
+cd /d "C:\Users\Maximinuszhang\Desktop\PYTHON\perfume-tools-main"
 
 echo.
 echo =======================================
-echo    🌴 一键推送代码 + 启动系统
+echo    Push to GitHub + Start Local App
 echo =======================================
 echo.
 
-:: 推送到 GitHub（自动处理冲突）
+echo Step 1: Pushing to GitHub...
 git add -A
-git commit -m "自动更新 %date% %time%"
+git commit -m "auto update %date% %time%"
 
-:: 先拉取远程内容，再推送
+:: 拉取远程内容，避免冲突
 git pull origin main --allow-unrelated-histories --no-edit
-git push
 
+:: 推送到远程 main 分支
+git push -u origin main
 
-:: === 第二步：启动本地应用 ===
-echo.
-echo 🚀 正在启动本地 Streamlit...
-if not exist "venv\Scripts\activate.bat" (
-    python -m venv venv
+if %ERRORLEVEL% EQU 0 (
+    echo [OK] GitHub push success!
+) else (
+    echo [WARN] GitHub push failed
 )
+echo.
+
+echo Step 2: Starting local Streamlit...
+if not exist "venv\Scripts\activate.bat" python -m venv venv
 call venv\Scripts\activate.bat
 pip install -r requirements.txt --quiet
-pip install newspaper3k lxml_html_clean feedparser trafilatura --quiet
+
+start http://localhost:8501
 streamlit run app.py
 
 pause
