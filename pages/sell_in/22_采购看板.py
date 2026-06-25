@@ -14,26 +14,26 @@ has_data = not df_oss.empty
 
 if has_data:
     df_oss.columns = [c.strip() for c in df_oss.columns]
-    
+
     # 找到各列
     status_col = None
     for col in df_oss.columns:
         if col == '采购状态' or '状态' in col:
             status_col = col
             break
-    
+
     satisfy_col = None
     for col in df_oss.columns:
         if '满足' in col:
             satisfy_col = col
             break
-    
+
     amount_col = None
     for col in df_oss.columns:
         if '金额' in col:
             amount_col = col
             break
-    
+
     st.success(f"✅ 已加载采购数据（共 {len(df_oss)} 条）")
 else:
     st.info("📊 暂无上传数据，显示示例数据")
@@ -44,18 +44,31 @@ st.markdown("---")
 # ===== KPI 统计 =====
 if has_data:
     total_orders = len(df_oss)
-    
+
     if amount_col:
         total_amount = df_oss[amount_col].sum()
     else:
         total_amount = 38500000
-    
-    # 计算满足率
+
+    # ===== 计算满足率（兼容多种数据格式） =====
     if satisfy_col:
-        satisfy_count = len(df_oss[df_oss[satisfy_col].astype(str).str.contains('是')])
-        partial_count = len(df_oss[df_oss[satisfy_col].astype(str).str.contains('部分')])
-        # 满足率 = (完全满足 + 部分满足*0.5) / 总订单数
-        satisfy_rate = (satisfy_count + partial_count * 0.5) / total_orders * 100
+        # 将满足状态列转为字符串，统一处理
+        satisfy_values = df_oss[satisfy_col].astype(str).str.strip()
+
+        # 统计各种满足状态
+        satisfy_count = len(satisfy_values[satisfy_values.str.contains('是', na=False)])
+        partial_count = len(satisfy_values[satisfy_values.str.contains('部分', na=False)])
+
+        # 如果全是 0 或空，从采购状态推算
+        if satisfy_count == 0 and partial_count == 0:
+            if status_col:
+                delivered = len(df_oss[df_oss[status_col].astype(str).str.contains('到货')])
+                satisfy_rate = delivered / total_orders * 100
+            else:
+                satisfy_rate = 87.5
+        else:
+            # 满足率 = (完全满足 + 部分满足*0.5) / 总订单数
+            satisfy_rate = (satisfy_count + partial_count * 0.5) / total_orders * 100
     else:
         # 如果没有满足状态列，从采购状态推算
         if status_col:
@@ -63,7 +76,7 @@ if has_data:
             satisfy_rate = delivered / total_orders * 100
         else:
             satisfy_rate = 87.5
-    
+
     if status_col:
         pending = len(df_oss[df_oss[status_col].astype(str).str.contains('审核|待发')])
     else:
@@ -103,7 +116,7 @@ if has_data:
         if '下单日期' in col or '日期' in col:
             date_col = col
             break
-    
+
     if date_col and amount_col:
         st.subheader("📈 月度采购趋势")
         df_temp = df_oss.copy()

@@ -13,25 +13,32 @@ def get_bucket():
     )
     return oss2.Bucket(
         auth,
-        "https://oss-cn-shanghai.aliyuncs.com",  # 你的 Endpoint
-        "files-maximinus"                          # 你的 Bucket 名称
+        "https://oss-cn-shanghai.aliyuncs.com",
+        "files-maximinus"
     )
 
 def upload_to_oss(file, remote_path: str):
-    """上传文件到 OSS，remote_path 如 'sell_in/purchase.xlsx'"""
+    """上传文件到 OSS"""
     bucket = get_bucket()
     bucket.put_object(remote_path, file.read())
-    st.cache_data.clear()  # 清除缓存，强制刷新
+    st.cache_data.clear()
 
 def read_excel_from_oss(remote_path: str, sheet_name: int = 1) -> pd.DataFrame:
-    """从 OSS 读取 Excel 文件，默认读取第二个 Sheet（索引 1）"""
+    """从 OSS 读取 Excel 文件，默认读取第二个 Sheet（索引 1），自动去除空行空列"""
     try:
         bucket = get_bucket()
         obj = bucket.get_object(remote_path)
-        return pd.read_excel(BytesIO(obj.read()), sheet_name=sheet_name)
-    except Exception:
-        return pd.DataFrame()  # 文件不存在时返回空 DataFrame
+        df = pd.read_excel(BytesIO(obj.read()), sheet_name=sheet_name)
 
+        # ===== 去除全空行 =====
+        df = df.dropna(how='all').reset_index(drop=True)
+
+        # ===== 去除全空列 =====
+        df = df.dropna(axis=1, how='all')
+
+        return df
+    except Exception:
+        return pd.DataFrame()
 
 def read_csv_from_oss(remote_path: str) -> pd.DataFrame:
     """从 OSS 读取 CSV 文件"""
@@ -43,7 +50,7 @@ def read_csv_from_oss(remote_path: str) -> pd.DataFrame:
         return pd.DataFrame()
 
 def upload_section(remote_path: str, label: str = "上传数据文件"):
-    """通用上传组件，所有页面共用"""
+    """通用上传组件"""
     with st.sidebar.expander(f"📤 {label}", expanded=False):
         uploaded = st.file_uploader(
             "选择 Excel/CSV 文件",
