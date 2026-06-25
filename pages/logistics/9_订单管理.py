@@ -26,6 +26,9 @@ def load_orders():
     
     if not df_oss.empty:
         # 使用上传的真实数据
+    
+    if not df_oss.empty:
+        # 使用上传的真实数据
         df = df_oss.copy()
         
         # 确保列名正确

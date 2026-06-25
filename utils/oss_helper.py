@@ -23,14 +23,15 @@ def upload_to_oss(file, remote_path: str):
     bucket.put_object(remote_path, file.read())
     st.cache_data.clear()  # 清除缓存，强制刷新
 
-def read_excel_from_oss(remote_path: str) -> pd.DataFrame:
-    """从 OSS 读取 Excel 文件"""
+def read_excel_from_oss(remote_path: str, sheet_name: int = 1) -> pd.DataFrame:
+    """从 OSS 读取 Excel 文件，默认读取第二个 Sheet（索引 1）"""
     try:
         bucket = get_bucket()
         obj = bucket.get_object(remote_path)
-        return pd.read_excel(BytesIO(obj.read()))
+        return pd.read_excel(BytesIO(obj.read()), sheet_name=sheet_name)
     except Exception:
         return pd.DataFrame()  # 文件不存在时返回空 DataFrame
+
 
 def read_csv_from_oss(remote_path: str) -> pd.DataFrame:
     """从 OSS 读取 CSV 文件"""
