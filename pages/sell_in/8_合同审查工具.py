@@ -2,17 +2,60 @@ import streamlit as st
 import re
 import difflib
 from io import BytesIO
+import tempfile
+import os
 
 st.set_page_config(page_title="合同审查工具", page_icon="📄", layout="wide")
-st.title("📄 合同智能审查与对比工具（含OCR）")
+st.title("📄 合同智能审查与对比工具")
 
 tab1, tab2, tab3 = st.tabs(["🔍 风险审查", "🌐 中英文对比", "📊 新旧合同对比"])
 
 # ============================================================
-# 文件读取函数（支持 TXT / PDF / DOCX / 扫描PDF）
+# OCR 功能（扫描版PDF识别，作为后备方案）
+# ============================================================
+def read_scanned_pdf(pdf_content):
+    """读取扫描版PDF（通过PaddleOCR）"""
+    try:
+        from paddleocr import PaddleOCR
+        import fitz
+        
+        ocr = PaddleOCR(use_angle_cls=True, lang='ch', use_gpu=False, show_log=False)
+        doc = fitz.open(stream=pdf_content, filetype="pdf")
+        
+        full_text = ""
+        progress_bar = st.progress(0)
+        
+        for page_num in range(len(doc)):
+            progress_bar.progress((page_num + 1) / len(doc))
+            page = doc[page_num]
+            pix = page.get_pixmap(dpi=300)
+            img_bytes = pix.tobytes("png")
+            
+            result = ocr.ocr(img_bytes, cls=True)
+            if result and result[0]:
+                page_text = "\n".join([line[1][0] for line in result[0]])
+                full_text += f"\n=== 第 {page_num+1} 页 ===\n{page_text}\n"
+        
+        progress_bar.empty()
+        doc.close()
+        
+        if len(full_text.strip()) > 50:
+            st.success(f"✅ OCR识别完成！共识别 {len(full_text)} 字")
+            return full_text
+        return "⚠️ OCR未能提取到有效文字"
+    
+    except ImportError as e:
+        missing_pkg = "paddlepaddle" if "paddle" in str(e) else "paddleocr"
+        return f"❌ 请安装 {missing_pkg}：pip install {missing_pkg}"
+    except Exception as e:
+        return f"❌ OCR 处理失败：{e}"
+
+
+# ============================================================
+# 文件读取函数（支持 TXT / PDF / DOCX）
 # ============================================================
 def read_file(file):
-    """读取上传的文件，支持 TXT、PDF（含扫描版）、DOCX"""
+    """读取上传的文件，支持 TXT、PDF、DOCX"""
     file_type = file.name.split(".")[-1].lower()
     content = file.read()
     
@@ -31,57 +74,31 @@ def read_file(file):
             return f"❌ DOCX 读取失败：{e}"
     
     elif file_type == "pdf":
-    text = read_pdf_with_markitdown(content)
-    if text.startswith("❌"):
-        return text
-    if len(text.strip()) > 50:
-        return text
-    else:
-        # 如果文字太少，可能是扫描版，回退到 OCR
-        return read_scanned_pdf(content)
-
-            
-            if len(text.strip()) > 50:
+        # 先用 MarkItDown 尝试（速度快，适合电子版PDF）
+        try:
+            from markitdown import MarkItDown
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            md = MarkItDown()
+            result = md.convert(tmp_path)
+            os.unlink(tmp_path)
+            text = result.text_content
+            if len(text.strip()) > 100:
+                st.info("📄 已识别为电子版PDF")
                 return text
-            
-            # 文字太少，可能是扫描版PDF
-            st.info("🔍 检测到可能是扫描版PDF，正在启动OCR识别...")
-            return read_scanned_pdf(content)
-            
         except ImportError:
-            return read_scanned_pdf(content)
-        except Exception as e:
-            return f"❌ PDF 读取失败：{e}"
+            st.info("📦 正在安装 MarkItDown...")
+            os.system("pip install markitdown -q")
+        except Exception:
+            pass
+        
+        # 文字太少 → 可能是扫描版 → 用 OCR
+        st.info("🔍 尝试OCR识别扫描版PDF...")
+        return read_scanned_pdf(content)
     
     else:
         return f"❌ 不支持的文件格式：{file_type}"
-
-
-def read_pdf_with_markitdown(pdf_content):
-    """用 MarkItDown 读取 PDF（电子版和扫描版都支持）"""
-    try:
-        from markitdown import MarkItDown
-        import tempfile
-        
-        # 先把上传的文件保存到临时文件
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
-            tmp.write(pdf_content)
-            tmp_path = tmp.name
-        
-        # 用 MarkItDown 转换
-        md = MarkItDown()
-        result = md.convert(tmp_path)
-        
-        # 清理临时文件
-        import os
-        os.unlink(tmp_path)
-        
-        return result.text_content
-    except ImportError:
-        return "❌ 请安装 markitdown：pip install markitdown"
-    except Exception as e:
-        return f"❌ PDF 转换失败：{e}"
-
 
 
 # ============================================================
