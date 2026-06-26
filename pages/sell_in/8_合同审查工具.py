@@ -31,15 +31,15 @@ def read_file(file):
             return f"❌ DOCX 读取失败：{e}"
     
     elif file_type == "pdf":
-        # 先尝试用 pdfplumber 提取文字（电子版PDF）
-        try:
-            import pdfplumber
-            text = ""
-            with pdfplumber.open(BytesIO(content)) as pdf:
-                for page in pdf.pages:
-                    page_text = page.extract_text()
-                    if page_text:
-                        text += page_text + "\n"
+    text = read_pdf_with_markitdown(content)
+    if text.startswith("❌"):
+        return text
+    if len(text.strip()) > 50:
+        return text
+    else:
+        # 如果文字太少，可能是扫描版，回退到 OCR
+        return read_scanned_pdf(content)
+
             
             if len(text.strip()) > 50:
                 return text
@@ -57,41 +57,31 @@ def read_file(file):
         return f"❌ 不支持的文件格式：{file_type}"
 
 
-def read_scanned_pdf(pdf_content):
-    """读取扫描版PDF（通过PyMuPDF转图片 + OCR）"""
+def read_pdf_with_markitdown(pdf_content):
+    """用 MarkItDown 读取 PDF（电子版和扫描版都支持）"""
     try:
-        import fitz  # PyMuPDF
-        import easyocr
-
-        reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
-        doc = fitz.open(stream=pdf_content, filetype="pdf")
-        st.info(f"📄 共 {len(doc)} 页，正在进行OCR识别...")
-
-        full_text = ""
-        progress_bar = st.progress(0)
-
-        for page_num in range(len(doc)):
-            progress_bar.progress((page_num + 1) / len(doc))
-            page = doc[page_num]
-            pix = page.get_pixmap(dpi=300)
-            img_bytes = pix.tobytes("png")
-            result = reader.readtext(img_bytes, detail=0, paragraph=True)
-            full_text += f"\n=== 第 {page_num+1} 页 ===\n" + "\n".join(result) + "\n"
-
-        progress_bar.empty()
-        doc.close()
-
-        if len(full_text.strip()) > 50:
-            st.success(f"✅ OCR识别完成！共识别 {len(full_text)} 字")
-            return full_text
-        else:
-            return "⚠️ OCR未能提取到有效文字，请确认PDF是否为清晰扫描件"
-
-    except ImportError as e:
-        missing_pkg = "PyMuPDF" if "fitz" in str(e) else "easyocr"
-        return f"❌ 请安装 {missing_pkg}：pip install {missing_pkg}"
+        from markitdown import MarkItDown
+        import tempfile
+        
+        # 先把上传的文件保存到临时文件
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
+            tmp.write(pdf_content)
+            tmp_path = tmp.name
+        
+        # 用 MarkItDown 转换
+        md = MarkItDown()
+        result = md.convert(tmp_path)
+        
+        # 清理临时文件
+        import os
+        os.unlink(tmp_path)
+        
+        return result.text_content
+    except ImportError:
+        return "❌ 请安装 markitdown：pip install markitdown"
     except Exception as e:
-        return f"❌ OCR 处理失败：{e}"
+        return f"❌ PDF 转换失败：{e}"
+
 
 
 # ============================================================
