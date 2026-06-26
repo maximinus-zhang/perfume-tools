@@ -11,7 +11,7 @@ echo    Push to GitHub + Start Local App
 echo =======================================
 echo.
 
-echo Step 1: Pushing to GitHub...
+echo Step 1: Pushing to GitHub
 git add -A
 git commit -m "auto update %date% %time%"
 
