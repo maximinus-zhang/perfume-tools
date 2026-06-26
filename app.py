@@ -26,6 +26,7 @@ sell_in = [
     st.Page("pages/sell_in/4_满足率分析.py",   title="满足率分析", icon="✅"),
     st.Page("pages/sell_in/5_报表汇总.py",     title="报表汇总",   icon="📊"),
 st.Page("pages/sell_in/8_合同审查工具.py",  title="合同审查工具", icon="📄"),
+st.Page("pages/sell_in/7_需求预测.py",      title="需求预测",   icon="📈"),
 ]
 
 # ============================================================
