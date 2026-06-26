@@ -2,39 +2,11 @@ import streamlit as st
 import re
 import difflib
 from io import BytesIO
-import tempfile
-import os
 
 st.set_page_config(page_title="合同审查工具", page_icon="📄", layout="wide")
 st.title("📄 合同智能审查与对比工具（含OCR）")
 
 tab1, tab2, tab3 = st.tabs(["🔍 风险审查", "🌐 中英文对比", "📊 新旧合同对比"])
-
-# ============================================================
-# OCR 功能（扫描版PDF识别）
-# ============================================================
-@st.cache_resource
-def load_ocr_engine():
-    """加载 OCR 引擎（首次会下载模型）"""
-    try:
-        import easyocr
-        st.info("🔄 正在加载 OCR 模型（首次约需下载 100MB）...")
-        reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
-        return reader
-    except ImportError:
-        return None
-
-def ocr_image(image):
-    """对图片进行 OCR 识别"""
-    reader = load_ocr_engine()
-    if reader is None:
-        return "❌ 请安装 easyocr：pip install easyocr"
-    
-    try:
-        result = reader.readtext(image, detail=0, paragraph=True)
-        return "\n".join(result)
-    except Exception as e:
-        return f"❌ OCR 识别失败：{e}"
 
 # ============================================================
 # 文件读取函数（支持 TXT / PDF / DOCX / 扫描PDF）
@@ -69,58 +41,54 @@ def read_file(file):
                     if page_text:
                         text += page_text + "\n"
             
-            # 如果提取到文字且长度足够，说明是电子版PDF
             if len(text.strip()) > 50:
                 return text
             
-            # 文字太少，可能是扫描版PDF，启动OCR
+            # 文字太少，可能是扫描版PDF
             st.info("🔍 检测到可能是扫描版PDF，正在启动OCR识别...")
             return read_scanned_pdf(content)
             
         except ImportError:
-            # 没有 pdfplumber，尝试直接 OCR
-            st.info("📦 正在安装PDF解析工具，同时启动OCR...")
             return read_scanned_pdf(content)
         except Exception as e:
             return f"❌ PDF 读取失败：{e}"
     
     else:
-        return f"❌ 不支持的文件格式：{file_type}，请上传 TXT / PDF / DOCX"
+        return f"❌ 不支持的文件格式：{file_type}"
 
 
 def read_scanned_pdf(pdf_content):
-    """读取扫描版PDF（通过OCR）"""
+    """读取扫描版PDF（通过PyMuPDF转图片 + OCR）"""
     try:
-        from pdf2image import convert_from_bytes
-        
-        # 将PDF转为图片
-        images = convert_from_bytes(pdf_content, dpi=300)
-        st.info(f"📄 共 {len(images)} 页，正在进行OCR识别...")
-        
+        import fitz  # PyMuPDF
+        import easyocr
+
+        reader = easyocr.Reader(['ch_sim', 'en'], gpu=False)
+        doc = fitz.open(stream=pdf_content, filetype="pdf")
+        st.info(f"📄 共 {len(doc)} 页，正在进行OCR识别...")
+
         full_text = ""
         progress_bar = st.progress(0)
-        
-        for i, img in enumerate(images):
-            # 更新进度
-            progress_bar.progress((i + 1) / len(images))
-            
-            # OCR识别
-            page_text = ocr_image(img)
-            if page_text.startswith("❌"):
-                return page_text
-            
-            full_text += f"\n=== 第 {i+1} 页 ===\n{page_text}\n"
-        
+
+        for page_num in range(len(doc)):
+            progress_bar.progress((page_num + 1) / len(doc))
+            page = doc[page_num]
+            pix = page.get_pixmap(dpi=300)
+            img_bytes = pix.tobytes("png")
+            result = reader.readtext(img_bytes, detail=0, paragraph=True)
+            full_text += f"\n=== 第 {page_num+1} 页 ===\n" + "\n".join(result) + "\n"
+
         progress_bar.empty()
-        
+        doc.close()
+
         if len(full_text.strip()) > 50:
             st.success(f"✅ OCR识别完成！共识别 {len(full_text)} 字")
             return full_text
         else:
             return "⚠️ OCR未能提取到有效文字，请确认PDF是否为清晰扫描件"
-    
+
     except ImportError as e:
-        missing_pkg = str(e).split("'")[1] if "'" in str(e) else "pdf2image"
+        missing_pkg = "PyMuPDF" if "fitz" in str(e) else "easyocr"
         return f"❌ 请安装 {missing_pkg}：pip install {missing_pkg}"
     except Exception as e:
         return f"❌ OCR 处理失败：{e}"
@@ -147,7 +115,6 @@ with tab1:
         if text.startswith("❌") or text.startswith("⚠️"):
             st.warning(text)
         else:
-            # 显示文件信息
             col1, col2 = st.columns(2)
             with col1:
                 st.info(f"📄 文件：{f.name}")
@@ -178,7 +145,6 @@ with tab1:
                 else:
                     st.warning(f"⚠️ 未检测到：{name}")
             
-            # 总体评价
             st.markdown("---")
             ratio = found_count / len(checks)
             if ratio >= 0.8:
@@ -186,7 +152,8 @@ with tab1:
             elif ratio >= 0.5:
                 st.warning(f"⚠️ 总体评价：合同基本完整，建议补充缺失条款（{found_count}/{len(checks)}）")
             else:
-                st.error(f"❌ 总体评价：合同缺失较多必备条款，请谨慎签署（{found_count}/{len(checks)}）")
+                st.error(f"❌ 总体评价：合同缺失较多必备条款（{found_count}/{len(checks)}）")
+
 
 # ============================================================
 # Tab 2：中英文对比
@@ -230,6 +197,7 @@ with tab2:
             else:
                 st.success("✅ 行数基本一致")
 
+
 # ============================================================
 # Tab 3：新旧合同对比
 # ============================================================
@@ -269,7 +237,6 @@ with tab3:
                 st.subheader("📝 差异详情")
                 st.code(result, language="diff")
                 
-                # 统计修改量
                 added = result.count('\n+') - result.count('\n+++')
                 removed = result.count('\n-') - result.count('\n---')
                 
