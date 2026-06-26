@@ -12,3 +12,8 @@ plotly>=5.18
 oss2
 prophet
 statsmodels
+pdfplumber
+python-docx
+easyocr
+pdf2image
+pillow
