@@ -16,6 +16,7 @@ sell_out = [
     st.Page("pages/sell_out/6_海南免税市场分析.py",  title="海南免税市场分析", icon="🏝️"),
     st.Page("pages/sell_out/7_门店地图分析.py",      title="门店地图分析",    icon="🗺️"),
     st.Page("pages/sell_out/10_库存预警.py",         title="库存预警",        icon="⚠️"),
+st.Page("pages/sell_in/9_需求预测_statsmodels.py", title="需求预测(SARIMA)", icon="📊"),
 ]
 
 # ============================================================
