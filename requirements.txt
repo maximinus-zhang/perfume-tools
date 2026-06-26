@@ -11,3 +11,4 @@ fake-useragent>=1.4
 plotly>=5.18
 oss2
 prophet
+statsmodels
