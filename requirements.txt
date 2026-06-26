@@ -17,3 +17,7 @@ python-docx
 easyocr
 pdf2image
 pillow
+lexnlp
+spacy
+markitdown
+python-docx

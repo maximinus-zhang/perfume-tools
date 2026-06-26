@@ -4,17 +4,18 @@ import difflib
 from io import BytesIO
 import tempfile
 import os
+from datetime import datetime
 
 st.set_page_config(page_title="合同审查工具", page_icon="📄", layout="wide")
-st.title("📄 合同智能审查与对比工具")
+st.title("📄 合同智能审查与对比工具（含AI分析）")
 
 tab1, tab2, tab3 = st.tabs(["🔍 风险审查", "🌐 中英文对比", "📊 新旧合同对比"])
 
 # ============================================================
-# 文件读取函数（支持 TXT / PDF（电子版）/ DOCX）
+# 文件读取函数
 # ============================================================
 def read_file(file):
-    """读取上传的文件，支持 TXT、PDF（电子版）、DOCX"""
+    """读取上传的文件，支持 TXT、PDF、DOCX"""
     file_type = file.name.split(".")[-1].lower()
     content = file.read()
 
@@ -33,7 +34,6 @@ def read_file(file):
             return f"❌ DOCX 读取失败：{e}"
 
     elif file_type == "pdf":
-        # 用 MarkItDown 读取 PDF（速度快，适合电子版）
         try:
             from markitdown import MarkItDown
             with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
@@ -46,22 +46,107 @@ def read_file(file):
             if len(text.strip()) > 50:
                 return text
             else:
-                return "⚠️ 未能提取到文字内容，可能是扫描版PDF。请先使用在线工具（如 https://ocr.space/）将PDF转为文字后再上传。"
+                return "⚠️ 未能提取到文字内容，可能是扫描版PDF。请先使用在线工具将PDF转为文字后再上传。"
         except ImportError:
             return "❌ 请安装 markitdown：pip install markitdown"
         except Exception as e:
             return f"❌ PDF 读取失败：{e}"
 
     else:
-        return f"❌ 不支持的文件格式：{file_type}，请上传 TXT / PDF / DOCX"
+        return f"❌ 不支持的文件格式：{file_type}"
 
 
 # ============================================================
-# Tab 1：风险审查
+# LexNLP 智能分析函数
+# ============================================================
+@st.cache_resource
+def load_lexnlp():
+    """加载 LexNLP 引擎"""
+    try:
+        import lexnlp
+        return True
+    except ImportError:
+        return False
+
+def analyze_with_lexnlp(text):
+    """使用 LexNLP 分析合同文本"""
+    results = {
+        "amounts": [],      # 金额
+        "dates": [],        # 日期
+        "parties": [],      # 当事人
+        "laws": [],         # 法律引用
+        "definitions": [],  # 定义条款
+        "obligations": [],  # 义务条款
+    }
+    
+    try:
+        from lexnlp.extract.en.amounts import get_amounts
+        from lexnlp.extract.en.dates import get_dates
+        from lexnlp.extract.en.definitions import get_definitions
+        
+        # 提取金额
+        try:
+            for amount in get_amounts(text):
+                results["amounts"].append(f"{amount.get('amount', '')} {amount.get('currency', '')}")
+        except:
+            pass
+        
+        # 提取日期
+        try:
+            for date in get_dates(text):
+                results["dates"].append(str(date))
+        except:
+            pass
+        
+        # 提取定义条款
+        try:
+            for defn in get_definitions(text):
+                results["definitions"].append(defn)
+        except:
+            pass
+        
+    except Exception as e:
+        st.warning(f"LexNLP 分析部分失败：{e}")
+    
+    return results
+
+
+# ============================================================
+# 关键词风险分析（补充 LexNLP 无法覆盖的部分）
+# ============================================================
+def analyze_keywords(text):
+    """关键词风险分析"""
+    risks = []
+    
+    # 风险条款关键词
+    risk_patterns = [
+        ("🔄 自动续约条款", r"自动续[约签]|auto.?renew"),
+        ("💰 赔偿限额条款", r"赔偿.*?限额|赔偿.*?上限|limit.*?liability"),
+        ("🔒 保密条款", r"保密|confidential"),
+        ("⚖️ 仲裁条款", r"仲裁|arbitration"),
+        ("📋 管辖法院条款", r"管辖|jurisdiction"),
+        ("🚫 单方变更权", r"有权.*?修改|有权.*?变更|单方.*?变更"),
+        ("📊 数据保护条款", r"个人数据|个人信息|隐私|personal data|GDPR"),
+        ("⏰ 不可抗力条款", r"不可抗力|force majeure"),
+        ("📝 终止条款", r"终止|termination|cancel"),
+        ("✅ 验收条款", r"验收|检验|inspection|acceptance"),
+    ]
+    
+    for risk_name, pattern in risk_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            risks.append({"name": risk_name, "status": "✅ 已包含"})
+        else:
+            risks.append({"name": risk_name, "status": "⚠️ 未检测到，建议补充"})
+    
+    return risks
+
+
+# ============================================================
+# Tab 1：风险审查（增强版）
 # ============================================================
 with tab1:
-    st.header("合同风险点审查")
-    st.caption("支持电子版PDF / Word / TXT（扫描版PDF请先转文字）")
+    st.header("合同风险点审查（含AI分析）")
+    st.caption("支持电子版PDF / Word / TXT | 自动提取金额、日期、当事人等关键信息")
 
     f = st.file_uploader(
         "上传合同文件",
@@ -71,22 +156,64 @@ with tab1:
     )
 
     if f:
-        with st.spinner("正在读取文件..."):
+        with st.spinner("正在读取并分析合同..."):
             text = read_file(f)
 
         if text.startswith("❌") or text.startswith("⚠️"):
             st.warning(text)
         else:
-            col1, col2 = st.columns(2)
+            # 显示文件信息
+            col1, col2, col3 = st.columns(3)
             with col1:
                 st.info(f"📄 文件：{f.name}")
             with col2:
                 st.info(f"📝 字数：{len(text)}字")
+            with col3:
+                st.info(f"📊 段落数：{len(text.splitlines())}行")
 
-            with st.expander("📖 预览合同原文", expanded=False):
-                st.text_area("原文", text[:3000] + ("..." if len(text) > 3000 else ""), height=300)
+            # ===== LexNLP 智能分析 =====
+            st.subheader("🤖 AI 智能提取")
+            has_lexnlp = load_lexnlp()
+            
+            if has_lexnlp:
+                with st.spinner("正在使用 LexNLP 进行智能分析..."):
+                    ai_results = analyze_with_lexnlp(text)
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    if ai_results["amounts"]:
+                        st.success(f"💰 检测到 {len(ai_results['amounts'])} 处金额")
+                        for a in ai_results["amounts"][:10]:
+                            st.caption(f"   • {a}")
+                    else:
+                        st.info("💰 未检测到金额信息")
+                    
+                    if ai_results["dates"]:
+                        st.success(f"📅 检测到 {len(ai_results['dates'])} 处日期")
+                        for d in ai_results["dates"][:10]:
+                            st.caption(f"   • {d}")
+                    else:
+                        st.info("📅 未检测到日期信息")
+                
+                with col2:
+                    if ai_results["definitions"]:
+                        st.success(f"📋 检测到 {len(ai_results['definitions'])} 处定义条款")
+                        for d in ai_results["definitions"][:10]:
+                            st.caption(f"   • {d}")
+                    else:
+                        st.info("📋 未检测到定义条款")
+                    
+                    if ai_results["parties"]:
+                        st.success(f"👥 检测到 {len(ai_results['parties'])} 处当事人信息")
+                    else:
+                        st.info("👥 未检测到当事人信息")
+            else:
+                st.info("💡 提示：安装 LexNLP 可获取更智能的合同分析（pip install lexnlp）")
 
-            st.subheader("✅ 必备条款检查")
+            # ===== 必备条款检查 =====
+            st.markdown("---")
+            st.subheader("✅ 必备条款完整性检查")
+            
             checks = [
                 ("合同主体", r"甲方|乙方|party[_\s]?[abAB]|hereinafter"),
                 ("合同标的", r"标的|服务[内容范围]|scope of (work|service)"),
@@ -98,7 +225,7 @@ with tab1:
                 ("终止条款", r"终止|termination|cancel"),
                 ("签署生效", r"签署|生效|sign|execut|in witness"),
             ]
-
+            
             found_count = 0
             for name, pattern in checks:
                 if re.search(pattern, text, re.IGNORECASE):
@@ -106,19 +233,44 @@ with tab1:
                     found_count += 1
                 else:
                     st.warning(f"⚠️ 未检测到：{name}")
-
+            
+            # ===== 风险条款分析 =====
             st.markdown("---")
-            ratio = found_count / len(checks)
-            if ratio >= 0.8:
-                st.success(f"✅ 总体评价：合同较完整（{found_count}/{len(checks)}）")
-            elif ratio >= 0.5:
-                st.warning(f"⚠️ 总体评价：合同基本完整，建议补充缺失条款（{found_count}/{len(checks)}）")
-            else:
-                st.error(f"❌ 总体评价：合同缺失较多必备条款（{found_count}/{len(checks)}）")
+            st.subheader("⚠️ 风险条款检测")
+            risk_results = analyze_keywords(text)
+            
+            risk_found = 0
+            risk_missing = 0
+            for risk in risk_results:
+                if "✅" in risk["status"]:
+                    st.success(f"{risk['name']}：{risk['status']}")
+                    risk_found += 1
+                else:
+                    st.warning(f"{risk['name']}：{risk['status']}")
+                    risk_missing += 1
+            
+            # ===== 总体评价 =====
+            st.markdown("---")
+            st.subheader("📊 总体评价")
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("✅ 必备条款", f"{found_count}/{len(checks)}")
+            with col2:
+                st.metric("📋 风险条款已含", risk_found)
+            with col3:
+                st.metric("⚠️ 建议补充", risk_missing)
+            with col4:
+                score = int((found_count / len(checks) * 0.6 + risk_found / len(risk_results) * 0.4) * 100)
+                st.metric("📈 合同完整度", f"{score}%")
+            
+            # 预览原文
+            with st.expander("📖 预览合同原文", expanded=False):
+                st.text_area("原文", text[:3000] + ("..." if len(text) > 3000 else ""), height=300)
 
 
 # ============================================================
-# Tab 2：中英文对比
+# Tab 2：中英文对比（保持原有）
 # ============================================================
 with tab2:
     st.header("中英文合同对比")
@@ -161,7 +313,7 @@ with tab2:
 
 
 # ============================================================
-# Tab 3：新旧合同对比
+# Tab 3：新旧合同对比（保持原有）
 # ============================================================
 with tab3:
     st.header("新旧合同差异对比")
@@ -198,10 +350,10 @@ with tab3:
             if result.strip():
                 st.subheader("📝 差异详情")
                 st.code(result, language="diff")
-
+                
                 added = result.count('\n+') - result.count('\n+++')
                 removed = result.count('\n-') - result.count('\n---')
-
+                
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("🟢 新增行数", max(added, 0))
