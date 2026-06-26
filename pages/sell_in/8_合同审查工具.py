@@ -11,57 +11,16 @@ st.title("📄 合同智能审查与对比工具")
 tab1, tab2, tab3 = st.tabs(["🔍 风险审查", "🌐 中英文对比", "📊 新旧合同对比"])
 
 # ============================================================
-# OCR 功能（扫描版PDF识别，作为后备方案）
-# ============================================================
-def read_scanned_pdf(pdf_content):
-    """读取扫描版PDF（通过PaddleOCR）"""
-    try:
-        from paddleocr import PaddleOCR
-        import fitz
-        
-        ocr = PaddleOCR(use_angle_cls=True, lang='ch', use_gpu=False, show_log=False)
-        doc = fitz.open(stream=pdf_content, filetype="pdf")
-        
-        full_text = ""
-        progress_bar = st.progress(0)
-        
-        for page_num in range(len(doc)):
-            progress_bar.progress((page_num + 1) / len(doc))
-            page = doc[page_num]
-            pix = page.get_pixmap(dpi=300)
-            img_bytes = pix.tobytes("png")
-            
-            result = ocr.ocr(img_bytes, cls=True)
-            if result and result[0]:
-                page_text = "\n".join([line[1][0] for line in result[0]])
-                full_text += f"\n=== 第 {page_num+1} 页 ===\n{page_text}\n"
-        
-        progress_bar.empty()
-        doc.close()
-        
-        if len(full_text.strip()) > 50:
-            st.success(f"✅ OCR识别完成！共识别 {len(full_text)} 字")
-            return full_text
-        return "⚠️ OCR未能提取到有效文字"
-    
-    except ImportError as e:
-        missing_pkg = "paddlepaddle" if "paddle" in str(e) else "paddleocr"
-        return f"❌ 请安装 {missing_pkg}：pip install {missing_pkg}"
-    except Exception as e:
-        return f"❌ OCR 处理失败：{e}"
-
-
-# ============================================================
-# 文件读取函数（支持 TXT / PDF / DOCX）
+# 文件读取函数（支持 TXT / PDF（电子版）/ DOCX）
 # ============================================================
 def read_file(file):
-    """读取上传的文件，支持 TXT、PDF、DOCX"""
+    """读取上传的文件，支持 TXT、PDF（电子版）、DOCX"""
     file_type = file.name.split(".")[-1].lower()
     content = file.read()
-    
+
     if file_type == "txt":
         return content.decode("utf-8", errors="ignore")
-    
+
     elif file_type == "docx":
         try:
             from docx import Document
@@ -72,9 +31,9 @@ def read_file(file):
             return "❌ 请安装 python-docx：pip install python-docx"
         except Exception as e:
             return f"❌ DOCX 读取失败：{e}"
-    
+
     elif file_type == "pdf":
-        # 先用 MarkItDown 尝试（速度快，适合电子版PDF）
+        # 用 MarkItDown 读取 PDF（速度快，适合电子版）
         try:
             from markitdown import MarkItDown
             with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
@@ -84,21 +43,17 @@ def read_file(file):
             result = md.convert(tmp_path)
             os.unlink(tmp_path)
             text = result.text_content
-            if len(text.strip()) > 100:
-                st.info("📄 已识别为电子版PDF")
+            if len(text.strip()) > 50:
                 return text
+            else:
+                return "⚠️ 未能提取到文字内容，可能是扫描版PDF。请先使用在线工具（如 https://ocr.space/）将PDF转为文字后再上传。"
         except ImportError:
-            st.info("📦 正在安装 MarkItDown...")
-            os.system("pip install markitdown -q")
-        except Exception:
-            pass
-        
-        # 文字太少 → 可能是扫描版 → 用 OCR
-        st.info("🔍 尝试OCR识别扫描版PDF...")
-        return read_scanned_pdf(content)
-    
+            return "❌ 请安装 markitdown：pip install markitdown"
+        except Exception as e:
+            return f"❌ PDF 读取失败：{e}"
+
     else:
-        return f"❌ 不支持的文件格式：{file_type}"
+        return f"❌ 不支持的文件格式：{file_type}，请上传 TXT / PDF / DOCX"
 
 
 # ============================================================
@@ -106,19 +61,19 @@ def read_file(file):
 # ============================================================
 with tab1:
     st.header("合同风险点审查")
-    st.caption("支持电子版PDF / 扫描版PDF / Word / TXT")
-    
+    st.caption("支持电子版PDF / Word / TXT（扫描版PDF请先转文字）")
+
     f = st.file_uploader(
         "上传合同文件",
         type=["txt", "pdf", "docx"],
         key="risk",
-        help="支持电子版PDF、扫描版PDF（自动OCR识别）、Word文档、纯文本"
+        help="支持电子版PDF、Word文档、纯文本。扫描版PDF请先转文字。"
     )
-    
+
     if f:
         with st.spinner("正在读取文件..."):
             text = read_file(f)
-        
+
         if text.startswith("❌") or text.startswith("⚠️"):
             st.warning(text)
         else:
@@ -127,10 +82,10 @@ with tab1:
                 st.info(f"📄 文件：{f.name}")
             with col2:
                 st.info(f"📝 字数：{len(text)}字")
-            
+
             with st.expander("📖 预览合同原文", expanded=False):
                 st.text_area("原文", text[:3000] + ("..." if len(text) > 3000 else ""), height=300)
-            
+
             st.subheader("✅ 必备条款检查")
             checks = [
                 ("合同主体", r"甲方|乙方|party[_\s]?[abAB]|hereinafter"),
@@ -143,7 +98,7 @@ with tab1:
                 ("终止条款", r"终止|termination|cancel"),
                 ("签署生效", r"签署|生效|sign|execut|in witness"),
             ]
-            
+
             found_count = 0
             for name, pattern in checks:
                 if re.search(pattern, text, re.IGNORECASE):
@@ -151,7 +106,7 @@ with tab1:
                     found_count += 1
                 else:
                     st.warning(f"⚠️ 未检测到：{name}")
-            
+
             st.markdown("---")
             ratio = found_count / len(checks)
             if ratio >= 0.8:
@@ -167,19 +122,19 @@ with tab1:
 # ============================================================
 with tab2:
     st.header("中英文合同对比")
-    st.caption("支持电子版PDF / 扫描版PDF / Word / TXT")
-    
+    st.caption("支持电子版PDF / Word / TXT")
+
     col1, col2 = st.columns(2)
     with col1:
         cn = st.file_uploader("中文合同", type=["txt", "pdf", "docx"], key="cn")
     with col2:
         en = st.file_uploader("英文合同", type=["txt", "pdf", "docx"], key="en")
-    
+
     if cn and en:
         with st.spinner("正在读取文件..."):
             cn_text = read_file(cn)
             en_text = read_file(en)
-        
+
         if cn_text.startswith("❌"):
             st.error(f"中文文件：{cn_text}")
         elif en_text.startswith("❌"):
@@ -187,7 +142,7 @@ with tab2:
         else:
             cn_lines = cn_text.splitlines()
             en_lines = en_text.splitlines()
-            
+
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("中文行数", len(cn_lines))
@@ -196,7 +151,7 @@ with tab2:
             with col3:
                 diff_lines = abs(len(cn_lines) - len(en_lines))
                 st.metric("行数差异", diff_lines)
-            
+
             if diff_lines > 10:
                 st.warning(f"⚠️ 行数差异较大（差{diff_lines}行），建议检查是否有缺漏")
             elif diff_lines > 3:
@@ -210,19 +165,19 @@ with tab2:
 # ============================================================
 with tab3:
     st.header("新旧合同差异对比")
-    st.caption("支持电子版PDF / 扫描版PDF / Word / TXT")
-    
+    st.caption("支持电子版PDF / Word / TXT")
+
     col1, col2 = st.columns(2)
     with col1:
         old = st.file_uploader("旧合同", type=["txt", "pdf", "docx"], key="old")
     with col2:
         new = st.file_uploader("新合同", type=["txt", "pdf", "docx"], key="new")
-    
+
     if old and new:
         with st.spinner("正在读取文件..."):
             old_text = read_file(old)
             new_text = read_file(new)
-        
+
         if old_text.startswith("❌"):
             st.error(f"旧合同：{old_text}")
         elif new_text.startswith("❌"):
@@ -233,20 +188,20 @@ with tab3:
                 st.metric("旧合同字数", f"{len(old_text)}字")
             with col2:
                 st.metric("新合同字数", f"{len(new_text)}字")
-            
+
             diff = difflib.unified_diff(
                 old_text.splitlines(), new_text.splitlines(),
                 fromfile="旧合同", tofile="新合同"
             )
             result = "\n".join(diff)
-            
+
             if result.strip():
                 st.subheader("📝 差异详情")
                 st.code(result, language="diff")
-                
+
                 added = result.count('\n+') - result.count('\n+++')
                 removed = result.count('\n-') - result.count('\n---')
-                
+
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("🟢 新增行数", max(added, 0))
