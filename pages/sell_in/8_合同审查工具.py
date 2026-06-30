@@ -57,62 +57,7 @@ def read_file(file):
 
 
 # ============================================================
-# LexNLP 智能分析函数
-# ============================================================
-@st.cache_resource
-def load_lexnlp():
-    """加载 LexNLP 引擎"""
-    try:
-        import lexnlp
-        return True
-    except ImportError:
-        return False
-
-def analyze_with_lexnlp(text):
-    """使用 LexNLP 分析合同文本"""
-    results = {
-        "amounts": [],      # 金额
-        "dates": [],        # 日期
-        "parties": [],      # 当事人
-        "laws": [],         # 法律引用
-        "definitions": [],  # 定义条款
-        "obligations": [],  # 义务条款
-    }
-    
-    try:
-        from lexnlp.extract.en.amounts import get_amounts
-        from lexnlp.extract.en.dates import get_dates
-        from lexnlp.extract.en.definitions import get_definitions
-        
-        # 提取金额
-        try:
-            for amount in get_amounts(text):
-                results["amounts"].append(f"{amount.get('amount', '')} {amount.get('currency', '')}")
-        except:
-            pass
-        
-        # 提取日期
-        try:
-            for date in get_dates(text):
-                results["dates"].append(str(date))
-        except:
-            pass
-        
-        # 提取定义条款
-        try:
-            for defn in get_definitions(text):
-                results["definitions"].append(defn)
-        except:
-            pass
-        
-    except Exception as e:
-        st.warning(f"LexNLP 分析部分失败：{e}")
-    
-    return results
-
-
-# ============================================================
-# 关键词风险分析（补充 LexNLP 无法覆盖的部分）
+# 关键词风险分析
 # ============================================================
 def analyze_keywords(text):
     """关键词风险分析"""
@@ -142,7 +87,7 @@ def analyze_keywords(text):
 
 
 # ============================================================
-# Tab 1：风险审查（增强版）
+# Tab 1：风险审查
 # ============================================================
 with tab1:
     st.header("合同风险点审查（含AI分析）")
@@ -171,44 +116,9 @@ with tab1:
             with col3:
                 st.info(f"📊 段落数：{len(text.splitlines())}行")
 
-            # ===== LexNLP 智能分析 =====
+            # ===== AI 智能提取 =====
             st.subheader("🤖 AI 智能提取")
-            has_lexnlp = load_lexnlp()
-            
-            if has_lexnlp:
-                with st.spinner("正在使用 LexNLP 进行智能分析..."):
-                    ai_results = analyze_with_lexnlp(text)
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    if ai_results["amounts"]:
-                        st.success(f"💰 检测到 {len(ai_results['amounts'])} 处金额")
-                        for a in ai_results["amounts"][:10]:
-                            st.caption(f"   • {a}")
-                    else:
-                        st.info("💰 未检测到金额信息")
-                    
-                    if ai_results["dates"]:
-                        st.success(f"📅 检测到 {len(ai_results['dates'])} 处日期")
-                        for d in ai_results["dates"][:10]:
-                            st.caption(f"   • {d}")
-                    else:
-                        st.info("📅 未检测到日期信息")
-                
-                with col2:
-                    if ai_results["definitions"]:
-                        st.success(f"📋 检测到 {len(ai_results['definitions'])} 处定义条款")
-                        for d in ai_results["definitions"][:10]:
-                            st.caption(f"   • {d}")
-                    else:
-                        st.info("📋 未检测到定义条款")
-                    
-                    if ai_results["parties"]:
-                        st.success(f"👥 检测到 {len(ai_results['parties'])} 处当事人信息")
-                    else:
-                        st.info("👥 未检测到当事人信息")
-            else:
-                st.info("💡 提示：安装 LexNLP 可获取更智能的合同分析（pip install lexnlp）")
+            st.info("💡 提示：安装 LexNLP 可获取更智能的合同分析（pip install lexnlp）")
 
             # ===== 必备条款检查 =====
             st.markdown("---")
@@ -270,7 +180,7 @@ with tab1:
 
 
 # ============================================================
-# Tab 2：中英文对比（保持原有）
+# Tab 2：中英文对比
 # ============================================================
 with tab2:
     st.header("中英文合同对比")
@@ -313,7 +223,7 @@ with tab2:
 
 
 # ============================================================
-# Tab 3：新旧合同对比（保持原有）
+# Tab 3：新旧合同对比
 # ============================================================
 with tab3:
     st.header("新旧合同差异对比")
