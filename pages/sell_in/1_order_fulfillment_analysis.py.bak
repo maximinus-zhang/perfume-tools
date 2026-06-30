@@ -256,7 +256,7 @@ def get_sheet_order_data(ws, sn):
                     except: pass
                 if data: return data
     
-    # ===== GDF 格式（原版）=====
+    # GDF 格式
     for r in range(1, min(6, ws.max_row + 1)):
         for c in range(1, min(ws.max_column + 1, 30)):
             v = safe_val(ws, r, c)
@@ -287,122 +287,7 @@ def get_sheet_order_data(ws, sn):
                             if q > 0: data.append((r2, cs, int(q)))
                         except: pass
                     if data: return data
-
-    # ===== 新增：GDF 扩展扫描（扫描50行找 VAN 列头，兼容 File4 v2格式）=====
-    for r in range(1, min(50, ws.max_row + 1)):
-        for c in range(1, min(ws.max_column + 1, 30)):
-            v = safe_val(ws, r, c)
-            if v and str(v).strip().upper() == "VAN":
-                # 避免与上面的 GDF 格式重复（只处理前6行没找到的情况）
-                if r < 7:
-                    continue
-                header_row = r
-                van_col = c
-                qty_candidates = []
-                # 找"Qty"或"Qty (in pcs)"列
-                for c2 in range(c + 1, min(ws.max_column + 1, c + 15)):
-                    v2 = safe_val(ws, r, c2)
-                    if v2:
-                        s2 = str(v2).strip().lower()
-                        if s2 == "qty" or s2.startswith("qty"):
-                            qty_candidates.append(c2)
-                if not qty_candidates:
-                    for c2 in range(c + 1, min(ws.max_column + 1, c + 15)):
-                        v2 = safe_val(ws, r, c2)
-                        if v2 and ("quantity" in str(v2).strip().lower()):
-                            qty_candidates.append(c2)
-                if qty_candidates:
-                    qty_col = qty_candidates[0]
-                    data = []
-                    for r2 in range(header_row + 1, ws.max_row + 1):
-                        cv = safe_val(ws, r2, van_col)
-                        qv = safe_val(ws, r2, qty_col)
-                        if cv is None: continue
-                        cs = str(cv).strip()
-                        # 跳过汇总行、空行、短码
-                        skip_words = ['qty', 'total', 'subtotal', '合计', '总计', '货转', 'gft']
-                        if not cs or len(cs) < 3: continue
-                        if any(skip in cs.lower() for skip in skip_words): continue
-                        try:
-                            q = float(str(qv or '0').strip())
-                            if q > 0: data.append((r2, cs, int(q)))
-                        except: pass
-                    if data: return data
-
-    # ===== 新增：Versace 格式（File2）=====
-    # 查找同时包含 "code" 和 "Order Qty" 的行
-    for r in range(1, min(30, ws.max_row + 1)):
-        code_col = None
-        qty_col = None
-        for c in range(1, min(ws.max_column + 1, 30)):
-            v = safe_val(ws, r, c)
-            if v:
-                s = str(v).strip().lower()
-                if s == "code" or s == "item code":
-                    code_col = c
-                elif s == "order qty" or s == "qty" or s == "quantity":
-                    qty_col = c
-        if code_col and qty_col:
-            data = []
-            for r2 in range(r + 1, ws.max_row + 1):
-                cv = safe_val(ws, r2, code_col)
-                qv = safe_val(ws, r2, qty_col)
-                if cv is None: continue
-                cs = str(cv).strip()
-                if not cs or len(cs) < 3: continue
-                # 跳过纯数字汇总行
-                try:
-                    float(cs)
-                    continue  # 纯数字跳过（不是产品代码）
-                except:
-                    pass
-                try:
-                    q = float(str(qv or '0').strip())
-                    if q > 0: data.append((r2, cs, int(q)))
-                except: pass
-            if data: return data
-
-    # ===== 新增：LIST sheet 格式（File3 PO260601049）=====
-    # 检查 sheet 名为 LIST，A列=Reference，S列=最终采购数量
-    if sn.lower().strip() == 'list':
-        # 检查第1行是否有 Reference 和 最终采购数量
-        ref_col = None
-        qty_col = None
-        for c in range(1, min(ws.max_column + 1, 30)):
-            v = safe_val(ws, 1, c)
-            if v:
-                s = str(v).strip().lower()
-                if s == 'reference' or '参考' in s or s == 'code':
-                    ref_col = c
-                elif '最终采购数量' in s or '采购数量' in s or 'order qty' in s:
-                    qty_col = c
-        # 如果第1行没找到，再扫描前5行
-        if not ref_col or not qty_col:
-            for r in range(1, min(6, ws.max_row + 1)):
-                for c in range(1, min(ws.max_column + 1, 30)):
-                    v = safe_val(ws, r, c)
-                    if v:
-                        s = str(v).strip().lower()
-                        if s == 'reference' or '参考' in s or s == 'code':
-                            ref_col = c
-                        elif '最终采购数量' in s or '采购数量' in s:
-                            qty_col = c
-        if ref_col and qty_col:
-            data = []
-            for r2 in range(2, ws.max_row + 1):
-                cv = safe_val(ws, r2, ref_col)
-                qv = safe_val(ws, r2, qty_col)
-                if cv is None: continue
-                cs = str(cv).strip()
-                if not cs or len(cs) < 3: continue
-                skip_words = ['total', 'subtotal', '合计', '总计', 'tester', '试用装']
-                if any(skip in cs.lower() for skip in skip_words): continue
-                try:
-                    q = float(str(qv or '0').strip())
-                    if q > 0: data.append((r2, cs, int(q)))
-                except: pass
-            if data: return data
-
+    
     return None
 
 
