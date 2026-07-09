@@ -1,7 +1,6 @@
 """
-海南免税商情监控 v1.3 - Streamlit 可视化仪表盘
-✅ 超链接可点击  ✅ 年份标注  ✅ 全国12大机场  ✅ 数据来源区分
-✅ 所有字段 get() 兜底，杜绝 KeyError
+海南免税商情监控 v2.0 - Streamlit 可视化仪表盘
+✅ 12大机场  ✅ 新闻超链接可点击  ✅ 月度真实分布  ✅ 年份标注
 """
 
 import streamlit as st
@@ -12,7 +11,7 @@ from utils.hainan_scraper import HainanScraper, AIRPORT_DB
 st.set_page_config(page_title="海南免税商情监控", page_icon="🏝️", layout="wide")
 
 # ============================================================
-# 缓存：TTL=86400秒（24小时）
+# 缓存
 # ============================================================
 
 @st.cache_data(ttl=86400, show_spinner="🔄 正在爬取最新数据，请稍候...")
@@ -25,7 +24,7 @@ def get_scraped_data(force_refresh=False):
 # ============================================================
 
 st.title("🏝️ 海南免税商情监控")
-st.caption("数据来源: CAAC民航局 **2024年**官方排名 + 百度新闻实时搜索  |  每日自动更新")
+st.caption("数据来源: CAAC民航局官方排名 + 百度新闻实时搜索  |  每日自动更新")
 
 col1, col2 = st.columns([3, 1])
 with col2:
@@ -41,18 +40,35 @@ total_news = sum(len(data.get(k, [])) for k in
 st.success(f"📅 数据更新于: {today}  |  共 {total_news} 条新闻")
 
 # ============================================================
-# 📊 核心指标卡片
+# 安全取值函数
 # ============================================================
 
-st.markdown("---")
-st.subheader("📊 核心指标 (2024年 CAAC 数据)")
-
-airport_keys = list(AIRPORT_DB.keys())
-
-# ---------- 安全获取机场字段 ----------
 def safe_info(code, key, default=None):
     info = AIRPORT_DB.get(code, {})
     return info.get(key, default)
+
+def safe_news(data, key):
+    """新闻数据可能是 (title, url) 元组或纯字符串"""
+    items = data.get(key, [])
+    result = []
+    for item in items:
+        if isinstance(item, (tuple, list)):
+            if len(item) >= 2:
+                result.append((item[0], item[1]))
+            else:
+                result.append((str(item[0]), ""))
+        else:
+            result.append((str(item), ""))
+    return result
+
+# ============================================================
+# 📊 核心指标卡片（12大机场）
+# ============================================================
+
+st.markdown("---")
+st.subheader("📊 全国12大机场核心指标 (2024年 CAAC 数据)")
+
+airport_keys = list(AIRPORT_DB.keys())
 
 # 第一行：前6个
 cols = st.columns(6)
@@ -67,7 +83,7 @@ for i, code in enumerate(airport_keys[:6]):
             label=f"🛫 {code}",
             value=f"{annual} 万",
             delta=f"全国第{rank}名",
-            help=f"国内 {dom}% | 国际 {intl}% | {year}年"
+            help=f"国内 {dom}% | 国际 {intl}% | {year}年数据"
         )
 
 # 第二行：后6个
@@ -83,11 +99,11 @@ for i, code in enumerate(airport_keys[6:]):
             label=f"🛫 {code}",
             value=f"{annual} 万",
             delta=f"全国第{rank}名",
-            help=f"国内 {dom}% | 国际 {intl}% | {year}年"
+            help=f"国内 {dom}% | 国际 {intl}% | {year}年数据"
         )
 
 # ============================================================
-# 📈 机场吞吐量对比（条形图）
+# 📈 机场吞吐量对比
 # ============================================================
 
 st.markdown("---")
@@ -111,30 +127,39 @@ with col2:
     )
 
 # ============================================================
-# 📅 月度客流分布（交互式）
+# 📅 月度客流分布（真实分布）
 # ============================================================
 
 st.markdown("---")
-st.subheader("📅 月度旅客流量分布")
-st.caption("⚠️ **月度分布为基于季节规律的估算值，非官方数据，仅供参考**")
+st.subheader("📅 月度旅客流量分布（基于各机场历史季节规律估算）")
+st.caption("✅ 年总量为 CAAC 官方数据  |  ⚠️ 月度分布基于历史季节规律估算，非官方数据")
 
 months = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
 
 selected_airport = st.selectbox("选择机场查看月度分布", airport_keys, index=0)
 
-annual     = safe_info(selected_airport, "annual", 0)
-monthly_pct = safe_info(selected_airport, "monthly_pct", [8.33]*12)  # 默认8.33%
-dom_pct    = safe_info(selected_airport, "domestic_pct", 50)
-intl_pct   = safe_info(selected_airport, "international_pct", 50)
-data_year  = safe_info(selected_airport, "data_year", "2024")
+annual      = safe_info(selected_airport, "annual", 0)
+monthly_pct = safe_info(selected_airport, "monthly_pct", None)
+dom_pct     = safe_info(selected_airport, "domestic_pct", 50)
+intl_pct    = safe_info(selected_airport, "international_pct", 50)
+data_year   = safe_info(selected_airport, "data_year", "2024")
 
-total_pct = sum(monthly_pct)
-monthly_vals = [round(annual * p / total_pct, 1) if total_pct > 0 else 0 for p in monthly_pct]
+# 如果有月度分布数据，计算实际值
+if monthly_pct and len(monthly_pct) == 12:
+    total_pct = sum(monthly_pct)
+    if total_pct > 0:
+        monthly_vals = [round(annual * p / total_pct, 1) for p in monthly_pct]
+    else:
+        monthly_vals = [round(annual / 12, 1)] * 12
+else:
+    # 没有数据则均分
+    monthly_vals = [round(annual / 12, 1)] * 12
+    monthly_pct = [8.33] * 12
 
 monthly_df = pd.DataFrame({
     "月份": months,
     "客流量(万人次)": monthly_vals,
-    "占比(%)": monthly_pct
+    "占比(%)": [round(p, 1) for p in monthly_pct]
 })
 
 col1, col2 = st.columns([3, 1])
@@ -143,23 +168,28 @@ with col1:
                   color="#FF6B6B", height=350)
 with col2:
     st.metric(f"🛫 {selected_airport} ({data_year})", f"{annual} 万/年")
-    st.caption(f"✅ 年总量: CAAC官方数据")
-    st.caption(f"⚠️ 月度分布: 估算值")
+    st.caption(f"✅ 年总量: CAAC 官方")
+    st.caption(f"⚠️ 月度分布: 估算")
     st.metric("国内占比", f"{dom_pct}%")
     st.metric("国际占比", f"{intl_pct}%")
-    peak = max(monthly_vals) if monthly_vals else 0
-    peak_month = months[monthly_vals.index(peak)] if monthly_vals else "?"
-    st.metric(f"旺季 ({peak_month})", f"{peak:.0f} 万")
-    low = min(monthly_vals) if monthly_vals else 0
-    low_month = months[monthly_vals.index(low)] if monthly_vals else "?"
-    st.metric(f"淡季 ({low_month})", f"{low:.0f} 万")
+    if monthly_vals:
+        peak = max(monthly_vals)
+        peak_month = months[monthly_vals.index(peak)]
+        low = min(monthly_vals)
+        low_month = months[monthly_vals.index(low)]
+        st.metric(f"📈 旺季 ({peak_month})", f"{peak:.0f} 万")
+        st.metric(f"📉 淡季 ({low_month})", f"{low:.0f} 万")
+
+# 显示月度数据表
+with st.expander("📊 查看月度明细数据"):
+    st.dataframe(monthly_df, use_container_width=True, hide_index=True)
 
 # ============================================================
-# 🏗️ 航站楼 & 航线总览（含最新搜索）
+# 🏗️ 航站楼 & 航线总览
 # ============================================================
 
 st.markdown("---")
-st.subheader("🏗️ 航站楼 & 航线总览")
+st.subheader("🏗️ 航站楼 & 航线总览（12大机场）")
 st.caption("航站楼/航司: 基于公开资料整理  |  最新动态: 百度新闻实时搜索")
 
 for code in airport_keys:
@@ -170,9 +200,14 @@ for code in airport_keys:
     terminals   = info.get("terminals", {})
     airlines    = info.get("major_airlines", [])
     duty_free   = info.get("duty_free", {"operator": "暂无", "stores": "暂无", "note": "暂无"})
-    airport_news = data.get("airport_latest_news", {}).get(code, [])
+    code_en     = info.get("code_en", code)
 
-    with st.expander(f"🛫 **{code}** — {annual}万/年 (全国第{rank})"):
+    # 获取该机场的最新新闻
+    airport_news = safe_news(data, "airport_news")
+    # 过滤包含机场名的新闻
+    airport_filtered = [(t, u) for t, u in airport_news if code[:2] in t or code_en in t]
+
+    with st.expander(f"🛫 **{code} ({code_en})** — {annual}万/年 (全国第{rank})"):
         tabs = st.tabs(["🏗️ 航站楼", "✈️ 主力航司", "🛍️ 免税业务", "📰 最新动态"])
 
         with tabs[0]:
@@ -196,9 +231,13 @@ for code in airport_keys:
             st.markdown(f"- **备注**: {duty_free.get('note', '暂无')}")
 
         with tabs[3]:
-            if airport_news:
-                for i, (title, url) in enumerate(airport_news):
-                    st.markdown(f"{i+1}. [{title}]({url})")
+            shown = airport_filtered[:5] if airport_filtered else airport_news[:5]
+            if shown:
+                for i, (title, url) in enumerate(shown):
+                    if url:
+                        st.markdown(f"{i+1}. [{title}]({url})")
+                    else:
+                        st.markdown(f"{i+1}. {title}")
             else:
                 st.info("暂无最新动态")
 
@@ -216,6 +255,7 @@ for code in airport_keys:
     intl_pct = safe_info(code, "international_pct", 0)
     rank = safe_info(code, "rank", "?")
     data_year = safe_info(code, "data_year", "2024")
+    code_en = safe_info(code, "code_en", "")
     terminals = safe_info(code, "terminals", {})
     airlines = safe_info(code, "major_airlines", [])
 
@@ -223,6 +263,7 @@ for code in airport_keys:
     intl = round(annual * intl_pct / 100, 0)
     compare_data.append({
         "机场": code,
+        "代码": code_en,
         "年吞吐量(万)": annual,
         "全国排名": rank,
         "数据年份": data_year,
@@ -245,19 +286,23 @@ st.subheader("📰 最新动态 (点击标题打开原文)")
 news_tabs = st.tabs(["✈️ 机场动态", "🛍️ 机场免税", "💰 离岛免税", "📜 政策动态", "🏖️ 旅游客流"])
 
 news_categories = [
-    ("airport_news", "✈️ 机场动态", 0),
-    ("duty_free_news", "🛍️ 机场免税", 1),
-    ("li_island_news", "💰 离岛免税", 2),
-    ("policy_news", "📜 政策动态", 3),
-    ("travel_news", "🏖️ 旅游客流", 4),
+    ("airport_news", "✈️ 机场动态"),
+    ("duty_free_news", "🛍️ 机场免税"),
+    ("li_island_news", "💰 离岛免税"),
+    ("policy_news", "📜 政策动态"),
+    ("travel_news", "🏖️ 旅游客流"),
 ]
 
-for key, label, tab_idx in news_categories:
+for key, label in news_categories:
+    tab_idx = news_categories.index((key, label))
     with news_tabs[tab_idx]:
-        items = data.get(key, [])
+        items = safe_news(data, key)
         if items:
             for i, (title, url) in enumerate(items):
-                st.markdown(f"{i+1}. [{title}]({url})")
+                if url:
+                    st.markdown(f"{i+1}. [{title}]({url})")
+                else:
+                    st.markdown(f"{i+1}. {title}")
         else:
             st.info(f"暂无{label}相关新闻")
 
@@ -272,19 +317,32 @@ summary = data.get("summary", [])
 if summary:
     seen_summary = set()
     summary_rows = []
-    for icon, val, ctx in summary:
+    for item in summary:
+        if isinstance(item, (tuple, list)):
+            if len(item) >= 3:
+                icon, val, ctx = item[0], item[1], item[2]
+            elif len(item) == 2:
+                icon, val = item[0], item[1]
+                ctx = ""
+            else:
+                icon, val, ctx = str(item), "", ""
+        else:
+            icon, val, ctx = str(item), "", ""
         key = f"{icon}|{val}|{ctx[:30]}"
         if key not in seen_summary and ctx.strip():
             seen_summary.add(key)
             summary_rows.append({"类别": icon, "数据": val, "说明": ctx})
 
-    summary_df = pd.DataFrame(summary_rows)
-    st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    if summary_rows:
+        summary_df = pd.DataFrame(summary_rows)
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("暂无摘要数据")
 else:
     st.info("暂无摘要数据")
 
 # ============================================================
-# 页脚 - 数据来源说明
+# 页脚
 # ============================================================
 
 st.markdown("---")
@@ -306,4 +364,4 @@ with col2:
     - 最新动态 — 百度新闻实时搜索
     """)
 
-st.caption(f"本报告由海南免税商情监控 v1.3 自动生成 | {today}")
+st.caption(f"本报告由海南免税商情监控 v2.0 自动生成 | {today}")
