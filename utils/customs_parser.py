@@ -127,6 +127,20 @@ def build_monthly_from_xlsx(folder=None):
     return by_ym, recs
 
 
+def customs_folder_stats(folder=None):
+    """返回 (xlsx 文件数, 最新文件修改时间字符串)，用于页面顶部显示本地月报状态。"""
+    import datetime as _dt
+    folder = os.path.abspath(folder or XLSX_DIR)
+    if not os.path.isdir(folder):
+        return 0, ""
+    files = [fn for fn in os.listdir(folder)
+             if fn.lower().endswith(".xlsx") and not fn.startswith("~")]
+    if not files:
+        return 0, ""
+    latest = max(os.path.getmtime(os.path.join(folder, fn)) for fn in files)
+    return len(files), _dt.datetime.fromtimestamp(latest).strftime("%Y-%m-%d %H:%M")
+
+
 # ============================================================
 # 🌐 在线抓取（CDP，需本机开调试 Chrome）
 # ============================================================
