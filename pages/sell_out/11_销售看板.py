@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from utils.nav_meta import NAV
 
 st.title("🏪 Sell Out · 销售总看板")
 st.markdown("---")
@@ -13,23 +14,24 @@ col4.metric("📈 同比增速", "+15.8%", "+3.2%")
 
 st.markdown("---")
 st.subheader("📌 模块快捷入口")
+st.caption("以下入口自动跟随左侧导航生成，模块有增减或改名会同步更新")
 
-cols = st.columns(3)
-with cols[0]:
-    with st.container(border=True):
-        st.markdown("#### 🏝️ 海南免税")
-        st.metric("本月销售额", "¥8,520万")
-        st.markdown("👉 从左侧导航进入")
-with cols[1]:
-    with st.container(border=True):
-        st.markdown("#### 🗺️ 门店地图")
-        st.metric("覆盖省份", "22 省")
-        st.markdown("👉 从左侧导航进入")
-with cols[2]:
-    with st.container(border=True):
-        st.markdown("#### ⚠️ 库存预警")
-        st.metric("预警项", "23 项")
-        st.markdown("👉 从左侧导航进入")
+CURRENT_PAGE = "pages/sell_out/11_销售看板.py"
+for group in ("🏪 Sell Out 销售端", "🚚 物流模块"):
+    pages = [p for p in NAV[group] if p["path"] != CURRENT_PAGE]
+    if not pages:
+        continue
+    st.markdown(f"**{group}**")
+    # 每行最多 4 张卡片
+    for start in range(0, len(pages), 4):
+        row = pages[start:start + 4]
+        cols = st.columns(len(row))
+        for col, p in zip(cols, row):
+            with col:
+                with st.container(border=True):
+                    st.markdown(f"#### {p['icon']} {p['title']}")
+                    st.markdown("👉 从左侧导航进入")
+    st.markdown("")
 
 st.markdown("---")
 
