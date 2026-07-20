@@ -69,10 +69,12 @@ def load_sku_names():
 
 
 def now_shanghai():
-    """取上海时区的当前时间（部署在海外服务器时也能对上国内日期）"""
+    """取上海时区的当前时间（部署在海外服务器时也能对上国内日期）。
+    返回 naive（去时区）是为了和 Excel 读出的 naive 日期直接比较，
+    避免 pandas 'can't compare offset-naive and offset-aware datetimes' 报错。"""
     try:
         from zoneinfo import ZoneInfo
-        return datetime.now(ZoneInfo("Asia/Shanghai"))
+        return datetime.now(ZoneInfo("Asia/Shanghai")).replace(tzinfo=None)
     except Exception:
         return datetime.now()
 
