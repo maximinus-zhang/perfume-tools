@@ -12,3 +12,6 @@ venv/
 # === 系统 / 编辑器 ===
 .DS_Store
 Thumbs.db
+
+# === 本地数据（数据走 OSS，不进仓库）===
+data/
