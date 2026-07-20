@@ -1,5 +1,5 @@
 """
-📊 订单满足率分析工具 - Streamlit 页面
+📊 订单整理工具 - Streamlit 页面
 ========================================
 功能：上传订单+库存文件，计算TR总库存满足量 + 可借货仓满足量
 """
@@ -16,7 +16,7 @@ import time
 import traceback
 
 # ===================== 配置 =====================
-st.set_page_config(page_title="订单满足率分析", page_icon="✅", layout="wide")
+st.set_page_config(page_title="订单整理工具", page_icon="✅", layout="wide")
 
 BORROWABLE_WH = [
     'W-EC-001', 'W-EC-002',
@@ -490,7 +490,7 @@ def process_order_file(filepath, inventory, tr_col):
 
 # ===================== Streamlit 页面 =====================
 
-st.title("📊 订单满足率分析")
+st.title("📊 订单整理工具")
 st.markdown("从库存表匹配订单，计算 TR 总库存 + 可借货仓满足情况")
 
 st.divider()
