@@ -1,76 +1,18 @@
 # pages/7_门店地图分析.py
-# ============================================================
-# TR 门店网络与品牌覆盖分析（优化版）
-# 主要修复：
-#   1) 用中国省级 GeoJSON + go.Choropleth 真实按省填色，解决“灰色地图”问题
-#   2) 用 GeoJSON 质心放置省份标签，内蒙古等边境省份不再“漂”在奇怪位置
-#   3) @st.cache_data 缓存 GeoJSON 与门店数据，切换筛选更流畅
-#   4) GeoJSON 随模块打包（离线可用），缺失时自动在线兜底
-# ============================================================
 
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
+import numpy as np
 from datetime import datetime
-from pathlib import Path
-import json
-import urllib.request
 
-# ------------------------------------------------------------
-# 0. 中国省份边界 GeoJSON 加载（缓存）
-#    文件放本脚本同目录：china_provinces.json
-#    缺失时自动从阿里云 DataV 拉取兜底
-# ------------------------------------------------------------
-GEOJSON_URL = "https://geo.datav.aliyun.com/areas_v3/bound/100000_full.json"
+# ============================================================
+# 页面配置
+# ============================================================
+st.title("🗺️ 门店网络与品牌覆盖分析")
+st.markdown("---")
 
-
-@st.cache_data(show_spinner="正在加载中国地图边界…")
-def load_china_geojson():
-    local = Path(__file__).parent / "china_provinces.json"
-    if local.exists():
-        try:
-            return json.loads(local.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    try:
-        with urllib.request.urlopen(GEOJSON_URL, timeout=20) as resp:
-            return json.loads(resp.read().decode("utf-8"))
-    except Exception:
-        return None
-
-
-@st.cache_data
-def geo_label_positions(gj):
-    """从 GeoJSON 取每个省的质心(经纬度)，用于精确放置省份标签。"""
-    pos = {}
-    if not gj:
-        return pos
-    for f in gj["features"]:
-        nm = f.get("properties", {}).get("name", "")
-        c = f.get("properties", {}).get("centroid") or f.get("properties", {}).get("center")
-        if nm and c:
-            pos[nm] = (c[1], c[0])  # (lat, lon)
-    return pos
-
-
-# 短名 -> GeoJSON 全称
-FULL2SHORT = {
-    "北京市": "北京", "天津市": "天津", "河北省": "河北", "山西省": "山西",
-    "内蒙古自治区": "内蒙古", "辽宁省": "辽宁", "吉林省": "吉林", "黑龙江省": "黑龙江",
-    "上海市": "上海", "江苏省": "江苏", "浙江省": "浙江", "安徽省": "安徽",
-    "福建省": "福建", "江西省": "江西", "山东省": "山东", "河南省": "河南",
-    "湖北省": "湖北", "湖南省": "湖南", "广东省": "广东", "广西壮族自治区": "广西",
-    "海南省": "海南", "重庆市": "重庆", "四川省": "四川", "贵州省": "贵州",
-    "云南省": "云南", "西藏自治区": "西藏", "陕西省": "陕西", "甘肃省": "甘肃",
-    "青海省": "青海", "宁夏回族自治区": "宁夏", "新疆维吾尔自治区": "新疆",
-    "台湾省": "台湾", "香港特别行政区": "香港", "澳门特别行政区": "澳门",
-}
-SHORT2FULL = {v: k for k, v in FULL2SHORT.items()}
-
-# ------------------------------------------------------------
-# 1. 门店数据（经纬度/省份为手工补全，品牌覆盖来自 Excel 的 YES 矩阵）
-# ------------------------------------------------------------
 STORES = [
     {"pos": "Sanya HTB",          "city": "三亚",   "province": "海南", "lat": 18.2528, "lng": 109.5120, "operator": "CDFG HAINAN", "type": "DT", "status": "Existing"},
     {"pos": "Haikou XHG",         "city": "海口",   "province": "海南", "lat": 20.0440, "lng": 110.3540, "operator": "CDFG HAINAN", "type": "DT", "status": "Existing"},
@@ -161,31 +103,37 @@ BRAND_COVERAGE = {
     "MK (Michael Kors)": {"provinces": ["海南", "上海", "北京", "广东", "江苏", "浙江", "四川", "湖北", "湖南", "山东", "辽宁", "福建", "重庆", "天津", "云南", "陕西", "河南"], "store_count": 35},
 }
 
-# 门店类型样式（标记颜色/形状/中文名）
-TYPE_STYLE = {
-    "Airport": {"color": "#1E88E5", "symbol": "diamond",      "label": "机场店"},
-    "DT":      {"color": "#E53935", "symbol": "circle",       "label": "市区店"},
-    "Border":  {"color": "#43A047", "symbol": "square",       "label": "边境店"},
-    "Cruise":  {"color": "#8E24AA", "symbol": "triangle-up",  "label": "游轮店"},
+df_stores = pd.DataFrame(STORES)
+
+PROVINCE_CENTERS = {
+    "海南": {"lat": 19.5, "lng": 110.0}, "上海": {"lat": 31.2, "lng": 121.5},
+    "北京": {"lat": 39.9, "lng": 116.4}, "广东": {"lat": 23.1, "lng": 113.3},
+    "江苏": {"lat": 32.1, "lng": 118.8}, "浙江": {"lat": 30.3, "lng": 120.2},
+    "四川": {"lat": 30.6, "lng": 104.1}, "湖北": {"lat": 30.6, "lng": 114.3},
+    "湖南": {"lat": 28.2, "lng": 112.9}, "山东": {"lat": 36.7, "lng": 117.0},
+    "辽宁": {"lat": 41.8, "lng": 123.4}, "福建": {"lat": 26.1, "lng": 119.3},
+    "重庆": {"lat": 29.6, "lng": 106.6}, "天津": {"lat": 39.1, "lng": 117.2},
+    "云南": {"lat": 25.0, "lng": 102.7}, "陕西": {"lat": 34.3, "lng": 108.9},
+    "河南": {"lat": 34.8, "lng": 113.7}, "新疆": {"lat": 43.8, "lng": 87.6},
+    "内蒙古": {"lat": 43.6, "lng": 112.0}, "黑龙江": {"lat": 45.8, "lng": 126.5},
+    "吉林": {"lat": 43.9, "lng": 129.5}, "澳门": {"lat": 22.2, "lng": 113.55},
+    "香港": {"lat": 22.32, "lng": 114.18},
 }
 
-# ------------------------------------------------------------
-# 2. 页面配置
-# ------------------------------------------------------------
-st.set_page_config(page_title="门店网络与品牌覆盖分析", layout="wide")
-st.title("🗺️ 门店网络与品牌覆盖分析")
-st.markdown("---")
+# ⚠️ Plotly 用 "Macao" 不是 "Macau"
+PROVINCE_EN = {
+    "海南": "Hainan", "上海": "Shanghai", "北京": "Beijing", "广东": "Guangdong",
+    "江苏": "Jiangsu", "浙江": "Zhejiang", "四川": "Sichuan", "湖北": "Hubei",
+    "湖南": "Hunan", "山东": "Shandong", "辽宁": "Liaoning", "福建": "Fujian",
+    "重庆": "Chongqing", "天津": "Tianjin", "云南": "Yunnan", "陕西": "Shaanxi",
+    "河南": "Henan", "新疆": "Xinjiang", "内蒙古": "Inner Mongolia",
+    "黑龙江": "Heilongjiang", "吉林": "Jilin",
+    "澳门": "Macao",        # ✅ Plotly 识别为 Macao
+    "香港": "Hong Kong",
+}
 
-gj = load_china_geojson()
-geo_label_pos = geo_label_positions(gj)
-
-df_stores = pd.DataFrame(STORES)
-all_brands = sorted(list(BRAND_COVERAGE.keys()))
-
-# ------------------------------------------------------------
-# 3. 侧边栏筛选
-# ------------------------------------------------------------
 st.sidebar.header("🔍 筛选条件")
+all_brands = sorted(list(BRAND_COVERAGE.keys()))
 selected_brands = st.sidebar.multiselect("选择品牌（可多选）", options=all_brands, default=["VERSACE"])
 store_type_filter = st.sidebar.multiselect("门店类型", options=["All"] + sorted(df_stores["type"].unique()), default=["All"])
 operator_filter = st.sidebar.multiselect("运营商", options=["All"] + sorted(df_stores["operator"].unique()), default=["All"])
@@ -196,7 +144,6 @@ if "All" not in store_type_filter:
 if "All" not in operator_filter:
     df_filtered = df_filtered[df_filtered["operator"].isin(operator_filter)]
 
-# 顶部指标卡
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("🏪 总门店数", len(df_stores))
 col2.metric("📍 覆盖城市", df_stores["city"].nunique())
@@ -204,17 +151,22 @@ col3.metric("🗺️ 覆盖省级区域", df_stores["province"].nunique())
 col4.metric("🏷️ 品牌总数", len(all_brands))
 st.markdown("---")
 
-# ------------------------------------------------------------
-# 4. 品牌覆盖分析（交集/并集/覆盖率）
-# ------------------------------------------------------------
+# ---------- 品牌覆盖分析 ----------
 if selected_brands:
-    covered_provinces, union_provinces = None, set()
+    covered_provinces = set()
     for brand in selected_brands:
-        provs = set(BRAND_COVERAGE.get(brand, {}).get("provinces", []))
-        covered_provinces = provs if covered_provinces is None else (covered_provinces & provs)
-        union_provinces |= provs
+        if brand in BRAND_COVERAGE:
+            if not covered_provinces:
+                covered_provinces = set(BRAND_COVERAGE[brand]["provinces"])
+            else:
+                covered_provinces &= set(BRAND_COVERAGE[brand]["provinces"])
+    union_provinces = set()
+    for brand in selected_brands:
+        if brand in BRAND_COVERAGE:
+            union_provinces |= set(BRAND_COVERAGE[brand]["provinces"])
 
-    all_regions = set(FULL2SHORT.values())  # 全部省级区域（含港澳）
+    # ✅ 包含所有区域（含港澳）
+    all_regions = set(PROVINCE_EN.keys())
     covered_all = covered_provinces & all_regions
     union_all = union_provinces & all_regions
 
@@ -229,73 +181,75 @@ if selected_brands:
     c1.metric("共同覆盖区域（交集）", len(covered_all))
     c2.metric("任一品牌覆盖区域（并集）", len(union_all))
     c3.metric("全域覆盖率", f"{round(len(covered_all) / len(all_regions) * 100, 1)}%")
-    st.markdown("---")
 
-# ------------------------------------------------------------
-# 5. 中国地图（GeoJSON Choropleth 修复版）
-# ------------------------------------------------------------
+st.markdown("---")
+
+# ============================================================
+# 7. 中国地图 — ✨ 单个Choropleth修复版
+# ============================================================
 st.subheader("📍 中国门店分布与品牌覆盖地图")
 fig_map = go.Figure()
 
-if gj is not None:
-    # 5a. 省份填色：遍历 GeoJSON 每个省，按品牌覆盖给 z 值
-    geo_names, z_values, hover_texts = [], [], []
-    for f in gj["features"]:
-        full = f.get("properties", {}).get("name", "")
-        if not full:
-            continue
-        short = FULL2SHORT.get(full)
-        if not short:
-            # 数据中未涉及省份：浅灰、无数据
-            geo_names.append(full)
-            z_values.append(0.0)
-            hover_texts.append(f"⬜ {full} — 暂无门店数据")
-            continue
-        if selected_brands:
-            if short in covered_all:
-                geo_names.append(full)
-                z_values.append(1.0)
-                hover_texts.append(f"🟠 {short}（{full}）— 全部选中品牌均已覆盖")
-            elif short in union_all:
-                brand_list = [b for b in selected_brands if short in BRAND_COVERAGE.get(b, {}).get("provinces", [])]
-                geo_names.append(full)
-                z_values.append(0.5)
-                hover_texts.append(f"🟡 {short}（{full}）— 部分覆盖 ({', '.join(brand_list)})")
-            else:
-                geo_names.append(full)
-                z_values.append(0.0)
-                hover_texts.append(f"⬜ {short}（{full}）— 无品牌覆盖")
-        else:
-            geo_names.append(full)
-            z_values.append(0.0)
-            hover_texts.append(f"{short}（{full}）")
+# ---- 7a. 单层 Choropleth：z值区分颜色 ----
+all_province_names = list(PROVINCE_EN.values())
+all_province_cn = list(PROVINCE_EN.keys())
 
-    fig_map.add_trace(go.Choropleth(
-        geojson=gj,
-        locations=geo_names,
-        featureidkey="properties.name",
-        z=z_values,
-        text=hover_texts,
-        hoverinfo="text",
-        showscale=False,
-        marker_line_color="#FFFFFF",
-        marker_line_width=0.9,
-        colorscale=[
-            [0.0, "#ECEFF1"],  # 无数据/无覆盖：浅灰
-            [0.4, "#FFE0B2"],  # 部分覆盖：浅橙
-            [0.5, "#FFCC80"],
-            [0.9, "#FB8C00"],  # 全部覆盖：深橙
-            [1.0, "#F57C00"],
-        ],
-    ))
-else:
-    st.warning("⚠️ 未加载到中国地图边界数据（GeoJSON），地图仅显示门店标记。请将 china_provinces.json 放在本脚本同目录，或检查网络。")
+z_values = []
+hover_texts = []
 
-# 5b. 门店标记
-hover_texts_marker, marker_colors, marker_symbols = [], [], []
-for _, store in df_filtered.iterrows():
+for prov_cn in all_province_cn:
     if selected_brands:
-        covered_brands = [b for b in selected_brands if store["province"] in BRAND_COVERAGE.get(b, {}).get("provinces", [])]
+        if prov_cn in covered_all:
+            z_values.append(1.0)
+            hover_texts.append(f"🟠 {prov_cn} — 全部选中品牌均已覆盖")
+        elif prov_cn in union_all:
+            brand_list = [b for b in selected_brands 
+                          if prov_cn in BRAND_COVERAGE.get(b, {}).get("provinces", [])]
+            z_values.append(0.5)
+            hover_texts.append(f"🟡 {prov_cn} — 部分覆盖 ({', '.join(brand_list)})")
+        else:
+            z_values.append(0.0)
+            hover_texts.append(f"⬜ {prov_cn} — 无品牌覆盖")
+    else:
+        z_values.append(0.0)
+        hover_texts.append(f"{prov_cn}")
+
+fig_map.add_trace(go.Choropleth(
+    locations=all_province_names,
+    locationmode="country names",
+    z=z_values,
+    text=hover_texts,
+    hoverinfo="text",
+    marker_line_color="#999999",
+    marker_line_width=0.8,
+    showscale=False,
+    colorscale=[
+        [0.0, "#f0f0f0"],
+        [0.4, "#FFE0B2"],
+        [0.5, "#FFE0B2"],
+        [0.9, "#FFB300"],
+        [1.0, "#FFB300"],
+    ],
+    geo="geo"
+))
+
+# ---- 7b. 门店标记 ----
+TYPE_STYLE = {
+    "Airport": {"color": "#1E88E5", "symbol": "diamond", "label": "机场店"},
+    "DT":      {"color": "#E53935", "symbol": "circle",  "label": "市区店"},
+    "Border":  {"color": "#43A047", "symbol": "square",  "label": "边境店"},
+    "Cruise":  {"color": "#8E24AA", "symbol": "triangle-up", "label": "游轮店"},
+}
+
+df_map_stores = df_filtered.copy()
+hover_texts_marker = []
+marker_colors = []
+marker_symbols = []
+
+for _, store in df_map_stores.iterrows():
+    if selected_brands:
+        covered_brands = [b for b in selected_brands 
+                          if store["province"] in BRAND_COVERAGE.get(b, {}).get("provinces", [])]
         brand_info = f"覆盖品牌: {', '.join(covered_brands) if covered_brands else '无'}"
     else:
         brand_info = ""
@@ -303,39 +257,36 @@ for _, store in df_filtered.iterrows():
         f"<b>{store['pos']}</b><br>"
         f"📍 {store['city']}, {store['province']}<br>"
         f"🏢 {store['operator']}<br>"
-        f"🏷️ {store['type']} | {'✅' if store['status'] == 'Existing' else '🆕'}<br>{brand_info}"
+        f"🏷️ {store['type']} | {'✅' if store['status']=='Existing' else '🆕'}<br>{brand_info}"
     )
     marker_colors.append(TYPE_STYLE.get(store["type"], {}).get("color", "#999"))
     marker_symbols.append(TYPE_STYLE.get(store["type"], {}).get("symbol", "circle"))
 
 fig_map.add_trace(go.Scattergeo(
-    lon=df_filtered["lng"], lat=df_filtered["lat"],
+    lon=df_map_stores["lng"], lat=df_map_stores["lat"],
     text=hover_texts_marker, hoverinfo="text", mode="markers",
     marker=dict(symbol=marker_symbols, size=11, color=marker_colors,
-                line=dict(color="white", width=1.5), opacity=0.92),
+                line=dict(color="white", width=1.5), opacity=0.9),
     showlegend=False,
 ))
 
-# 5c. 省份名称标注（用 GeoJSON 质心，标签位置更准确）
+# ---- 7c. 省份名称标注 ----
 prov_labels, prov_lats, prov_lngs = [], [], []
-for full, (lat, lng) in geo_label_pos.items():
-    short = FULL2SHORT.get(full)
-    if not short:
-        continue
-    prov_labels.append(short)
-    prov_lats.append(lat)
-    prov_lngs.append(lng)
+for prov_cn, center in PROVINCE_CENTERS.items():
+    prov_labels.append(prov_cn)
+    prov_lats.append(center["lat"])
+    prov_lngs.append(center["lng"])
 
 fig_map.add_trace(go.Scattergeo(
     lon=prov_lngs, lat=prov_lats, text=prov_labels,
     mode="markers+text",
     marker=dict(size=0.01, color="rgba(0,0,0,0)", opacity=0),
-    textfont=dict(size=11, color="#37474F", family="Arial, sans-serif"),
+    textfont=dict(size=14, color="#444444", family="Arial, sans-serif"),
     textposition="middle center", hoverinfo="skip", showlegend=False,
 ))
 
-# 5d. 城市名称标注（去重，按门店数调整字号）
-city_agg = df_filtered.groupby(["city", "province"]).agg(
+# ---- 7d. 城市名称标注（去重）----
+city_agg = df_map_stores.groupby(["city", "province"]).agg(
     lat=("lat", "mean"), lng=("lng", "mean"), store_count=("pos", "count")
 ).reset_index()
 
@@ -345,28 +296,32 @@ fig_map.add_trace(go.Scattergeo(
     mode="markers+text",
     marker=dict(size=0.01, color="rgba(0,0,0,0)", opacity=0),
     textfont=dict(
-        size=city_agg["store_count"].apply(lambda x: min(9 + x * 1.2, 13)).tolist(),
-        color="#263238", family="Arial",
+        size=city_agg["store_count"].apply(lambda x: min(9 + x * 1.5, 14)).tolist(),
+        color="#333333", family="Arial",
     ),
     textposition="top center", hoverinfo="skip", showlegend=False,
 ))
 
-# 5e. 布局：自适应缩放至中国范围，干净浅色画布
-fig_map.update_geos(
-    visible=False,                 # 隐藏默认灰底，只显示我们的省块
-    fitbounds="locations",         # 自动缩放到数据范围（中国）
-    lataxis_range=(17, 54), lonaxis_range=(73, 136),
-)
+# ---- 7e. 布局 ----
 fig_map.update_layout(
     title=dict(
         text=f"TR 品牌门店中国分布图{' | 品牌: ' + ' + '.join(selected_brands) if selected_brands else ' | 全部门店'}",
-        font=dict(size=18, color="#263238"), x=0.5, xanchor="center",
+        font=dict(size=18, color="#333"), x=0.5, xanchor="center"
     ),
-    height=760,
-    margin=dict(l=10, r=10, t=60, b=20),
-    paper_bgcolor="#F7F9FC",
-    showlegend=False,
-    uirevision="china_map",        # 切换筛选时保持缩放/拖拽状态
+    geo=dict(
+        scope="asia", projection=dict(type="natural earth"),
+        showland=True, landcolor="#f9f9f9",
+        countrycolor="rgba(180,180,180,0.5)", countrywidth=0.8,
+        coastlinecolor="rgba(150,150,150,0.3)", coastlinewidth=0.5,
+        showocean=True, oceancolor="#e8f4f8",
+        showlakes=True, lakecolor="#e8f4f8",
+        showsubunits=True, subunitcolor="rgba(180,180,180,0.3)", subunitwidth=0.5,
+        center=dict(lat=33, lon=106),
+        projection_scale=4.2,
+        lonaxis=dict(range=[73, 136]),
+        lataxis=dict(range=[4, 56]),
+    ),
+    height=750, margin=dict(l=10, r=10, t=60, b=20), showlegend=False,
 )
 
 st.plotly_chart(fig_map, use_container_width=True)
@@ -378,16 +333,15 @@ lc2.markdown("🔴 **<span style='color:#E53935'>● 市区店</span>**", unsafe
 lc3.markdown("🟢 **<span style='color:#43A047'>■ 边境店</span>**", unsafe_allow_html=True)
 lc4.markdown("🟣 **<span style='color:#8E24AA'>▲ 游轮店</span>**", unsafe_allow_html=True)
 if selected_brands:
-    st.caption("🟠 深橙 = 全部覆盖 | 🟡 浅橙 = 部分覆盖 | ⬜ 浅灰 = 无覆盖/无数据")
+    st.caption("🟠 深橙 = 全部覆盖 | 🟡 浅橙 = 部分覆盖 | ⬜ 灰色 = 无覆盖")
+
 st.markdown("---")
 
-# ------------------------------------------------------------
-# 6. 品牌覆盖区域明细表
-# ------------------------------------------------------------
+# ---------- 8. 品牌覆盖区域详情表格 ----------
 if selected_brands:
     st.subheader("📋 品牌覆盖区域明细")
     detail_rows = []
-    for prov_cn in sorted(all_regions):
+    for prov_cn in sorted(PROVINCE_EN.keys()):
         brand_status = {}
         for brand in selected_brands:
             info = BRAND_COVERAGE.get(brand, {"provinces": []})
@@ -401,11 +355,10 @@ if selected_brands:
             **brand_status
         })
     st.dataframe(pd.DataFrame(detail_rows), use_container_width=True, hide_index=True)
+
 st.markdown("---")
 
-# ------------------------------------------------------------
-# 7. 门店网络分析图表
-# ------------------------------------------------------------
+# ---------- 9. 图表分析 ----------
 st.subheader("📈 门店网络分析图表")
 tab1, tab2, tab3, tab4 = st.tabs(["门店类型分布", "运营商分布", "区域门店排行", "品牌覆盖排行"])
 
@@ -413,8 +366,7 @@ with tab1:
     tc = df_stores["type"].value_counts().reset_index()
     tc.columns = ["门店类型", "数量"]
     fig1 = px.pie(tc, values="数量", names="门店类型", title="门店类型分布",
-                  color_discrete_sequence=px.colors.qualitative.Set2, hole=0.4,
-                  template="plotly_white")
+                  color_discrete_sequence=px.colors.qualitative.Set2, hole=0.4)
     fig1.update_traces(textposition="inside", textinfo="percent+label")
     st.plotly_chart(fig1, use_container_width=True)
 
@@ -422,8 +374,7 @@ with tab2:
     oc = df_stores["operator"].value_counts().reset_index()
     oc.columns = ["运营商", "数量"]
     fig2 = px.bar(oc, x="运营商", y="数量", title="运营商门店数量排行",
-                  color="数量", color_continuous_scale="Viridis", text_auto=True,
-                  template="plotly_white")
+                  color="数量", color_continuous_scale="Viridis", text_auto=True)
     fig2.update_layout(xaxis_tickangle=-30)
     st.plotly_chart(fig2, use_container_width=True)
 
@@ -432,8 +383,7 @@ with tab3:
     pc.columns = ["区域", "门店数"]
     fig3 = px.bar(pc.sort_values("门店数", ascending=True),
                   x="门店数", y="区域", title="各省/区域门店数量排行（含港澳）",
-                  color="门店数", color_continuous_scale="Oranges", text_auto=True,
-                  orientation="h", template="plotly_white")
+                  color="门店数", color_continuous_scale="Oranges", text_auto=True, orientation="h")
     fig3.update_layout(height=550)
     st.plotly_chart(fig3, use_container_width=True)
 
@@ -443,14 +393,11 @@ with tab4:
         bd.append({"品牌": brand, "覆盖区域数": len(info["provinces"]), "门店数": info["store_count"]})
     df_bd = pd.DataFrame(bd).sort_values("覆盖区域数", ascending=True)
     fig4 = px.bar(df_bd, x="覆盖区域数", y="品牌", title="品牌覆盖区域数量排行",
-                  color="门店数", color_continuous_scale="Blues", text_auto=True,
-                  orientation="h", template="plotly_white")
+                  color="门店数", color_continuous_scale="Blues", text_auto=True, orientation="h")
     fig4.update_layout(height=500)
     st.plotly_chart(fig4, use_container_width=True)
 
-# ------------------------------------------------------------
-# 8. 品牌覆盖能力雷达图
-# ------------------------------------------------------------
+# ---------- 10. 雷达图 ----------
 st.markdown("---")
 st.subheader("🛡️ 品牌覆盖能力对比")
 if len(selected_brands) >= 2:
@@ -474,14 +421,11 @@ if len(selected_brands) >= 2:
         ))
     fig_radar = go.Figure(data=radar_data)
     fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
-                            title="品牌覆盖能力雷达图对比", height=500, template="plotly_white")
+                            title="品牌覆盖能力雷达图对比", height=500)
     st.plotly_chart(fig_radar, use_container_width=True)
 else:
     st.info("请选择至少 2 个品牌进行对比分析")
 
-# ------------------------------------------------------------
-# 9. 原始数据导出
-# ------------------------------------------------------------
 st.markdown("---")
 with st.expander("📄 查看门店原始数据"):
     st.dataframe(df_stores, use_container_width=True, hide_index=True)

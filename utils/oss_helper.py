@@ -13,8 +13,8 @@ def get_bucket():
     )
     return oss2.Bucket(
         auth,
-        "https://oss-cn-shanghai.aliyuncs.com",
-        "files-maximinus"
+        "https://oss-cn-hangzhou.aliyuncs.com",
+        "maximinus-flies"
     )
 
 def upload_to_oss(file, remote_path: str):

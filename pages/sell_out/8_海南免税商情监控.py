@@ -100,7 +100,9 @@ def fmt_growth(val_25, val_24):
     return "N/A"
 
 def badge(src):
-    if src in ("官方", "XLSX实时") or "XLSX" in str(src):
+    if src == "XLSX+推算":
+        return "🟡 XLSX+推算"
+    elif src in ("官方", "XLSX实时") or "XLSX" in str(src):
         return "🟢 官方/XLSX"
     elif src == "推算":
         return "🟡 推算"
@@ -158,6 +160,60 @@ def build_analysis_months(hardcoded, by_ym):
     return rows
 
 
+def merge_customs_quarterly(hardcoded_quarter, by_ym):
+    """优先用 XLSX 月度数据重算 Q2；M6 缺失时，用 H1−ΣM1-M5 反推。"""
+    h1 = HA_DF_2026["ytd"]
+    out = []
+    for row in hardcoded_quarter:
+        r = dict(row)
+        if not r.get("q", "").startswith("Q2"):
+            out.append(r)
+            continue
+        m4 = by_ym.get((2026, 4))
+        m5 = by_ym.get((2026, 5))
+        m6 = by_ym.get((2026, 6))
+        # 只有当 M4/M5 至少有一个来自 XLSX 时才用月度口径
+        if not (m4 or m5):
+            out.append(r)
+            continue
+        # 收集 M1-M5 的 XLSX 金额与人次
+        m1_m5_amt = 0
+        m1_m5_pax = 0
+        for mo in range(1, 6):
+            rec = by_ym.get((2026, mo))
+            if rec and rec["amt"] is not None:
+                m1_m5_amt += rec["amt"]
+            if rec and rec["pax"] is not None:
+                m1_m5_pax += rec["pax"]
+        q2_amt = (m4["amt"] if m4 and m4["amt"] is not None else 0) + \
+                 (m5["amt"] if m5 and m5["amt"] is not None else 0)
+        q2_pax = (m4["pax"] if m4 and m4["pax"] is not None else 0) + \
+                 (m5["pax"] if m5 and m5["pax"] is not None else 0)
+        if m6 and m6["amt"] is not None:
+            q2_amt += m6["amt"]
+            q2_pax += m6["pax"] if m6["pax"] is not None else 0
+            r["amt_src"] = "XLSX实时"
+            r["pax_src"] = "XLSX实时"
+            r["note"] = "Q2=M4+M5+M6 XLSX真实值"
+        else:
+            m6_amt = h1["amount_2026"] - m1_m5_amt
+            m6_pax = h1["pax_2026"] - m1_m5_pax
+            q2_amt += m6_amt
+            q2_pax += m6_pax
+            r["amt_src"] = "XLSX+推算"
+            r["pax_src"] = "XLSX+推算"
+            r["note"] = "M4/M5来自XLSX真实值，M6=H1−Σ1-5反推"
+        # 重算同比
+        if r["amt25"] and r["amt25"] > 0:
+            r["yoy"] = round((q2_amt - r["amt25"]) / r["amt25"] * 100, 1)
+        if r["pax25"] and r["pax25"] > 0:
+            r["yoy_pax"] = round((q2_pax - r["pax25"]) / r["pax25"] * 100, 1)
+        r["amt26"] = round(q2_amt, 4)
+        r["pax26"] = round(q2_pax, 4) if q2_pax > 0 else None
+        out.append(r)
+    return out
+
+
 def customs_folder_stats(folder=None):
     """返回 (xlsx文件数, 最新文件修改时间字符串)，用于页面显示数据时效。"""
     folder = os.path.abspath(folder or XLSX_DIR)
@@ -194,7 +250,8 @@ st.caption(f"📌 YTD 口径：{yd['date_label']} ｜ 数据来源：{yd['source
 
 # 季度 + 月度YTD
 st.markdown("**📈 季度对比（金额 亿元 · 2026 vs 2025）**")
-qd = pd.DataFrame(HA_DF_2026["quarter"])
+q_rows = merge_customs_quarterly(HA_DF_2026["quarter"], st.session_state["customs_by_ym"])
+qd = pd.DataFrame(q_rows)
 q_show = qd[["q", "amt26", "amt25", "yoy", "pax26", "pax25", "yoy_pax", "amt_src", "note"]].copy()
 q_show.columns = ["季度", "2026金额", "2025金额", "金额同比%", "2026人数", "2025人数", "人数同比%",
                    "数据来源", "说明"]
@@ -290,9 +347,8 @@ else:
 
 # (3) 增长贡献 + 全年情景测算
 st.markdown("**📈 增长贡献与全年情景测算**")
-q = HA_DF_2026["quarter"]
-q1 = next(x for x in q if x["q"].startswith("Q1"))
-q2 = next(x for x in q if x["q"].startswith("Q2"))
+q1 = next(x for x in q_rows if x["q"].startswith("Q1"))
+q2 = next(x for x in q_rows if x["q"].startswith("Q2"))
 recs = st.session_state.get("customs_recs", [])
 full_2025 = None
 for rr in recs:
@@ -310,7 +366,7 @@ if h2_2025:
                           "全年 2026(亿)": round(full, 1),
                           "全年同比%": round((full / full_2025 - 1) * 100, 1) if full_2025 else None})
 projdf = pd.DataFrame(proj_rows)
-st.markdown(f"- **季度拆解**：Q1 金额 +{q1['yoy']}% → Q2 骤降至 +{q2['yoy']}%（Q2=H1−Q1反推）；"
+st.markdown(f"- **季度拆解**：Q1 金额 +{q1['yoy']}% → Q2 骤降至 +{q2['yoy']}%（{q2['note']}）；"
              f"5月金额同比仅 +0.4% 且件数 −4.9%，增长明显走平。")
 if full_2025:
     st.markdown(f"- **2025 全年基数**：{full_2025:.1f} 亿（取自 2025M12 海关累计）；H1 {h1_2025} + H2 {h2_2025:.1f}。")

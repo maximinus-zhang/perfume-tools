@@ -1,695 +1,281 @@
-# pages/6_海南免税市场分析.py
+# pages/sell_out/6_海南免税市场分析.py
+# ============================================================
+# 海南免税市场分析（真实公开数据版）
+# 优化于 2026-07-20 —— 派派
+#
+# 改了什么（相对旧版）：
+#   1. 旧版的“各门店数据”是用「全省总量 × 固定份额 × 季节系数」算出来的，
+#      纯合成、不是真实门店数据，而且连全省总量都夸大了约 2.6 倍。
+#   2. 新版【只使用公开来源的真实数据】（海口海关 / 海南省商务厅 /
+#      中国中免年报），每个数字都带来源链接，可在文末“数据来源”核对。
+#   3. 查不到的（如海旅/中服等门店年度营收、月度门店数据）一律标注
+#      “无公开数据”，【绝不编造】。
+#   4. 以“年度”为主：全省用年度真实趋势；门店用中免年报年度营业收入。
+#
+# 你怎么补充新数据（非技术也能改）：
+#   打开本文件，找到下面【真实数据区】三个字典（PROVINCE / STORES /
+#   SOURCES），按相同格式加一行即可，年份用数字、金额用亿元。
+#   例如新增 2026 全省数据：在 PROVINCE 里加一行  2026: {"sales": 500.0, "guests": 700.0}
+# ============================================================
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-import requests
-from bs4 import BeautifulSoup
-import re
 from datetime import datetime
-import os
-from io import BytesIO
-import base64
 
-DATA_DIR = "data/hainan_dutyfree"
-os.makedirs(DATA_DIR, exist_ok=True)
+# ============================================================
+# 【真实数据区】—— 仅公开来源，请勿编造
+# ============================================================
 
-STORES = [
-    "三亚国际免税城", "海口国际免税城", "海口日月广场免税店",
-    "海口美兰机场免税店", "三亚凤凰机场免税店", "海旅免税城",
-    "中服免税店", "万宁王府井免税港", "深免海口观澜湖店", "博鳌免税店"
+# 全省离岛免税：海口海关监管的“离岛免税购物金额”
+# 2025 年为海南省商务厅“12 家离岛免税店总销售额”口径（含免税+有税），客流未公开填 None
+PROVINCE = {
+    2019: {"sales": 134.9, "guests": 386.0},
+    2020: {"sales": 274.8, "guests": 448.4},
+    2021: {"sales": 495.0, "guests": 672.0},
+    2022: {"sales": 349.0, "guests": 422.4},
+    2023: {"sales": 437.6, "guests": 675.6},
+    2024: {"sales": 309.4, "guests": 568.3},
+    2025: {"sales": 475.2, "guests": None},  # 商务厅 12 家总销售额口径
+}
+
+# 中免旗下门店 / 子公司年度营业收入（中国中免年报，单位：亿元，含免税+有税）
+# 这是公开渠道能拿到的“最接近门店真实数据”的数字。
+# 键为门店/主体名，值为 {年份: 营收(亿元)}
+STORES = {
+    "三亚国际免税城（中免·三亚市内免税店）": {
+        2022: 302.44, 2023: 283.64, 2024: 204.18,
+    },
+    "海口国际免税城（中免·海口免税城公司）": {
+        2023: 68.38, 2024: 55.74,  # 2022 年 10 月才开业，无完整年报数据
+    },
+    "海免公司（日月广场/美兰/凤凰机场/博鳌）": {
+        2022: 56.38, 2023: 49.18, 2024: 35.54,
+    },
+}
+
+# 其他免税经营主体：公开渠道【没有】年度门店营收数据，仅列出名称，不展示数字
+OTHER_OPERATORS = [
+    "海旅免税城", "中服免税店", "深免海口观澜湖店",
+    "万宁王府井免税港", "海发控全球精品免税城",
 ]
 
-# ============================================================
-# 数据管理器 - 使用真实历史数据
-# ============================================================
-class DataManager:
+# 数据来源（带链接，方便核对）—— 新增数据请同步在这里补一条
+SOURCES = [
+    ("海口海关 · 2024 年海南离岛免税 309.4 亿元 / 568.3 万人次",
+     "https://news.cctv.com/2025/01/02/ARTI91tTeDriSGYEBRNDIZGp250102.shtml"),
+    ("海口海关 · 2023 年 437.6 亿元 / 675.6 万人次",
+     "https://www.cnr.cn/hn/jrhn/20240102/t20240102_526543913.shtml"),
+    ("海口海关 · 2022 年免税销售额 349 亿元 / 422.4 万人次",
+     "https://www.toutiao.com/article/7216307163017413152/"),
+    ("海口海关 · 2021 年 495 亿元 / 672 万人次",
+     "http://xian.customs.gov.cn/customs/xwfb34/mtjj35/4124581/index.html"),
+    ("海口海关 · 2020 年 274.8 亿元 / 448.4 万人次",
+     "http://m.hkwb.net/content/2021-01/29/content_3941176.htm"),
+    ("海口海关/海南省商务厅 · 2019 年 134.9 亿元 / 386 万人次",
+     "https://www.hinews.cn/news/system/2020/10/13/032433734.shtml"),
+    ("海南省商务厅 · 2025 年 12 家离岛免税店总销售额 475.2 亿元",
+     "https://dzswgf.mofcom.gov.cn/news/123/2026/3/1774588279585.html"),
+    ("中国中免 2024 年报 · 三亚市内店 204.18 亿 / 海口城 55.74 亿 / 海免 35.54 亿",
+     "https://www.9fzt.com/detail/sh_601888_10_796956811591.html"),
+    ("中国中免 2023 年报 · 三亚市内店 283.64 亿 / 海口城 68.38 亿 / 海免 49.18 亿",
+     "https://m.toutiao.com/article/7351263542664004133/"),
+    ("中国中免 2022 年报 · 三亚市内店 302.44 亿 / 海免 56.38 亿",
+     "https://www.toutiao.com/article/7216690799612789303/"),
+    ("三亚国际免税城 2024 全年销售额约 187 亿元（mall 实体报道口径，与年报 204 亿口径不同）",
+     "https://www.comnews.cn/content/2026-01/20/content_60874.html"),
+    ("海口海关 · 2026 年 1-6 月离岛免税 199.2 亿元 / 279.3 万人次（+18.8% / +12.6%）",
+     "https://db.hainan.gov.cn/xwdt/yszx/202607/t20260709_4107904.html"),
+    ("海口海关 · 封关后首段（2025-12-18~2026-04-30）离岛免税 222.2 亿元 / 297.3 万人次",
+     "https://df.youth.cn/dfyw/202605/t20260513_16656698.htm"),
+]
 
-    @staticmethod
-    def get_real_data():
-        """
-        基于海口海关/中免集团公开数据的真实历史数据
-        来源：海口海关官网、中免集团年报、海南省统计局
+# 最新动态（2026 封关后，非完整年度，仅作“最新”参考，不参与年度同比）
+LATEST = {
+    "2026 上半年（1-6 月）": {
+        "sales": 199.2, "guests": 279.3,
+        "sales_yoy": 18.8, "guests_yoy": 12.6,
+        "note": "海口海关监管离岛免税购物金额；购物件数 1596.6 万件（+7.3%）",
+    },
+}
 
-        注意：
-        - 每个年份必须包含12个月的数据列表
-        - 某个月份无真实数据时填 None（将跳过不生成记录）
-        - 2026年请在获取真实数据后填入相应月份
-        """
-        # 真实月度销售数据（亿元）
-        # None = 该月暂无真实数据，不会生成模拟记录
-        real_sales = {
-            2019: [25.7, 20.3, 28.5, 32.1, 35.8, 38.2, 42.5, 40.1, 36.8, 34.2, 30.5, 35.8],
-            2020: [30.2, 12.5, 28.8, 45.6, 52.3, 58.7, 65.2, 60.5, 55.8, 50.2, 48.5, 55.2],
-            2021: [42.5, 35.8, 48.2, 52.5, 58.8, 62.3, 68.5, 65.2, 58.8, 55.2, 50.5, 58.2],
-            2022: [48.2, 40.5, 52.3, 45.2, 48.5, 52.8, 55.2, 50.5, 45.8, 42.5, 40.2, 48.5],
-            2023: [52.5, 45.8, 55.2, 58.5, 62.8, 68.2, 72.5, 68.8, 62.5, 58.2, 55.5, 62.8],
-            2024: [58.2, 52.5, 62.8, 65.2, 70.5, 75.8, 80.2, 76.5, 70.8, 66.2, 62.5, 70.5],
-            2025: [62.5, 55.8, 66.2, 70.5, 75.8, 80.2, 85.5, 82.5, 76.8, 72.2, 68.5, 75.8],
-            # ========== 2026年数据配置区 ==========
-            # 请在获取真实数据后，将对应月份的数字填入下方的列表中
-            # 月份顺序：1月~12月
-            # 示例：1-5月有真实数据，6月起暂无
-            # 2026: [65.0, 58.0, 68.5, 72.0, 77.5, None, None, None, None, None, None, None],
-            # 如果完全没有2026年真实数据，请保持下方注释状态，则年份选择器不会出现2026
-            2026: [None, None, None, None, None, None, None, None, None, None, None, None],
-        }
-
-        # 真实月度客流数据（万人次）
-        real_guests = {
-            2019: [85, 68, 95, 105, 118, 128, 140, 135, 122, 112, 100, 118],
-            2020: [100, 42, 95, 150, 172, 195, 215, 200, 185, 165, 160, 182],
-            2021: [140, 118, 158, 172, 195, 205, 225, 215, 195, 182, 168, 192],
-            2022: [158, 135, 172, 148, 160, 175, 182, 168, 152, 140, 132, 160],
-            2023: [172, 152, 182, 195, 205, 225, 240, 228, 205, 192, 182, 205],
-            2024: [192, 172, 205, 215, 232, 248, 265, 252, 232, 218, 205, 232],
-            2025: [205, 182, 218, 232, 248, 265, 282, 272, 252, 238, 225, 248],
-            # ========== 2026年客流数据配置区 ==========
-            # 请与上方的销售数据保持同步更新
-            # 2026: [210, 185, 222, 238, 252, None, None, None, None, None, None, None],
-            2026: [None, None, None, None, None, None, None, None, None, None, None, None],
-        }
-
-        # 各店市场份额
-        shares = {
-            "三亚国际免税城": 0.32, "海口国际免税城": 0.22,
-            "海口日月广场免税店": 0.12, "海口美兰机场免税店": 0.10,
-            "三亚凤凰机场免税店": 0.08, "海旅免税城": 0.06,
-            "中服免税店": 0.04, "万宁王府井免税港": 0.03,
-            "深免海口观澜湖店": 0.02, "博鳌免税店": 0.01
-        }
-
-        # ========== 动态生成记录：只遍历有真实数据的年份和月份 ==========
-        records = []
-        # 自动筛选出有至少一个月真实数据的年份
-        available_years = sorted([
-            y for y in real_sales
-            if any(v is not None for v in real_sales[y])
-        ])
-
-        for year in available_years:
-            ms = real_sales[year]
-            mg = real_guests.get(year, [None] * 12)
-            for month in range(1, 13):
-                ts = ms[month - 1]
-                tg = mg[month - 1] if mg and month - 1 < len(mg) else None
-                # 跳过没有真实数据的月份
-                if ts is None:
-                    continue
-                # 若客流无数据则用0占位（不影响分析，仅不显示客流相关图表）
-                tg = tg if tg is not None else 0.0
-                for store, share in shares.items():
-                    v = 0.7 + (month / 12) * 0.6
-                    records.append({
-                        'year': year, 'month': month, 'store': store,
-                        'sales_amount': round(ts * share * v, 2),
-                        'guest_count': round(tg * share * (0.8 + (month / 12) * 0.4), 1),
-                        'yoy_growth': 0.0
-                    })
-
-        df = pd.DataFrame(records)
-        if len(df) > 0:
-            df['yoy_growth'] = df.groupby(['store', 'month'])['sales_amount'].pct_change() * 100
-            df['yoy_growth'] = df['yoy_growth'].fillna(0).round(1)
-
-        # ========== 活动数据 ==========
-        events = []
-        known = {
-            2023: [("三亚国际免税城", "周年庆", 8, 9), ("海口国际免税城", "开业周年", 10, 11)],
-            2024: [("三亚国际免税城", "周年庆", 8, 9), ("海口国际免税城", "周年庆", 10, 11),
-                   ("所有门店", "新春特惠", 1, 2), ("所有门店", "离岛免税节", 6, 7)],
-            2025: [("三亚国际免税城", "周年庆", 8, 9), ("海口国际免税城", "周年庆", 10, 11),
-                   ("所有门店", "新春特惠", 1, 2), ("所有门店", "海南免税节", 6, 8)],
-            # ========== 2026年活动数据（请在获取真实信息后配置）==========
-            # 2026: [("三亚国际免税城", "周年庆", 8, 9), ("海口国际免税城", "周年庆", 10, 11),
-            #        ("所有门店", "新春特惠", 1, 2), ("所有门店", "海南免税节", 6, 7)],
-        }
-        for year, el in known.items():
-            # 仅当该年份在 available_years 中才添加活动
-            if year not in available_years:
-                continue
-            for store, name, sm, em in el:
-                if store == "所有门店":
-                    for s in STORES:
-                        events.append({'year': year, 'store': s, 'event_name': name,
-                                       'start_month': sm, 'end_month': em})
-                else:
-                    events.append({'year': year, 'store': store, 'event_name': name,
-                                   'start_month': sm, 'end_month': em})
-        events_df = pd.DataFrame(events) if events else pd.DataFrame(
-            columns=['year', 'store', 'event_name', 'start_month', 'end_month'])
-        return df, events_df
-
-    @staticmethod
-    def save_data(df_sales, df_events):
-        df_sales.to_csv(f"{DATA_DIR}/sales_data.csv", index=False, encoding='utf-8-sig')
-        df_events.to_csv(f"{DATA_DIR}/events_data.csv", index=False, encoding='utf-8-sig')
-
-    @staticmethod
-    def load_data():
-        def valid(fp):
-            if not os.path.exists(fp) or os.path.getsize(fp) == 0:
-                if os.path.exists(fp):
-                    os.remove(fp)
-                return False
-            return True
-
-        sf, ef = f"{DATA_DIR}/sales_data.csv", f"{DATA_DIR}/events_data.csv"
-        ds = pd.read_csv(sf, encoding='utf-8-sig') if valid(sf) else None
-        de = pd.read_csv(ef, encoding='utf-8-sig') if valid(ef) else None
-        if ds is None or de is None or len(ds) == 0:
-            ds, de = DataManager.get_real_data()
-            DataManager.save_data(ds, de)
-        return ds, de
-
-    @staticmethod
-    def refresh_data():
-        ds, de = DataManager.get_real_data()
-        DataManager.save_data(ds, de)
-        return ds, de
-
-    @staticmethod
-    def get_available_months(df, year):
-        """获取指定年份中有数据的月份列表"""
-        months = df[df['year'] == year]['month'].unique()
-        return sorted(months)
 
 # ============================================================
-# 爬虫 - 360新闻
+# 数据加工（全部来自上面的真实数据，不做任何虚构推算）
 # ============================================================
-class WebCrawler:
-    @staticmethod
-    def search_news(query="海南 免税"):
-        headers = {
-            'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                           'AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'),
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'zh-CN,zh;q=0.9',
-        }
-        try:
-            resp = requests.get(
-                f"https://news.so.com/ns?q={query}&rank=rank",
-                headers=headers, timeout=15
-            )
-            if resp.status_code != 200:
-                return []
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            items = []
-            for li in soup.find_all('li', class_='item'):
-                a = li.find('a', class_=re.compile(r'title')) or li.find('a')
-                if not a:
-                    continue
-                title = a.get_text(strip=True)
-                if not title or len(title) < 8:
-                    continue
-                items.append({
-                    'title': title[:120],
-                    'link': a.get('href', ''),
-                    'source': '360新闻',
-                    'date': datetime.now().strftime('%Y-%m-%d')
-                })
-            return items[:20]
-        except Exception:
-            return []
+@st.cache_data
+def build_province_df():
+    rows = []
+    for y, d in PROVINCE.items():
+        rows.append({
+            "year": y,
+            "sales": d["sales"],
+            "guests": d["guests"],
+        })
+    df = pd.DataFrame(rows).sort_values("year").reset_index(drop=True)
+    # 同比增长（与上一年对比，使用全省销售额）
+    df["sales_yoy"] = df["sales"].pct_change() * 100
+    df["guests_yoy"] = df["guests"].pct_change() * 100
+    return df
 
-    @staticmethod
-    def extract_data(news_items):
-        extracted = []
-        for item in news_items:
-            title = item['title']
-            info = {
-                'title': title[:100], 'source': item['source'],
-                'link': item['link'], 'date': item['date'],
-                'sales_amount': None, 'unit': None,
-                'year': None, 'month': None,
-                'growth_rate': None, 'store_name': None, 'tags': []
-            }
-            m = re.search(r'(\d+[\.\d]*)\s*(亿|万)元', title)
-            if m:
-                info['sales_amount'], info['unit'] = float(m.group(1)), m.group(2)
-            m = re.search(r'(\d{4})年(\d{1,2})月', title)
-            if m:
-                info['year'], info['month'] = int(m.group(1)), int(m.group(2))
-            m = re.search(r'增长[了]?(\d+[\.\d]*)%', title)
-            if m:
-                info['growth_rate'] = float(m.group(1))
-            m = re.search(r'下降[了]?(\d+[\.\d]*)%', title)
-            if m:
-                info['growth_rate'] = -float(m.group(1))
-            for store in STORES:
-                if store[:2] in title:
-                    info['store_name'] = store
-                    break
-            if not info['store_name']:
-                if 'cdf' in title.lower() or '三亚' in title:
-                    info['store_name'] = '三亚国际免税城'
-                elif '海口' in title:
-                    info['store_name'] = '海口国际免税城'
-            tags = []
-            if '销售' in title:
-                tags.append('销售数据')
-            if '客流' in title or '旅客' in title:
-                tags.append('客流')
-            if '政策' in title or '新政' in title:
-                tags.append('政策')
-            if '活动' in title or '促销' in title:
-                tags.append('活动')
-            if '增长' in title:
-                tags.append('增长')
-            if '下降' in title:
-                tags.append('下降')
-            info['tags'] = '/'.join(tags) if tags else '一般资讯'
-            extracted.append(info)
-        return extracted
 
-# ============================================================
-# 分析引擎
-# ============================================================
-class MarketAnalyzer:
-    @staticmethod
-    def calc_summary(df, year, month):
-        cm = df[(df['year'] == year) & (df['month'] == month)]
-        lm = df[(df['year'] == year - 1) & (df['month'] == month)]
-        cs, ls = cm['sales_amount'].sum(), lm['sales_amount'].sum()
-        cg, lg = cm['guest_count'].sum(), lm['guest_count'].sum()
-        cytd = df[(df['year'] == year) & (df['month'] <= month)]
-        lytd = df[(df['year'] == year - 1) & (df['month'] <= month)]
-        return {
-            'cur_sales': cs,
-            'last_sales': ls,
-            'sales_yoy': ((cs - ls) / ls * 100) if ls else 0,
-            'cur_guests': cg,
-            'last_guests': lg,
-            'guest_yoy': ((cg - lg) / lg * 100) if lg else 0,
-            'ytd_sales': cytd['sales_amount'].sum(),
-            'ytd_last_sales': lytd['sales_amount'].sum(),
-            'ytd_growth': ((cytd['sales_amount'].sum() - lytd['sales_amount'].sum())
-                           / lytd['sales_amount'].sum() * 100) if lytd['sales_amount'].sum() else 0,
-            'avg_price': cs * 10000 / cg if cg else 0
-        }
+@st.cache_data
+def build_store_df():
+    rows = []
+    for store, series in STORES.items():
+        years = sorted(series.keys())
+        for i, y in enumerate(years):
+            prev = series.get(years[i - 1]) if i > 0 else None
+            yoy = ((series[y] - prev) / prev * 100) if prev else None
+            rows.append({
+                "store": store,
+                "year": y,
+                "revenue": series[y],
+                "yoy": yoy,
+            })
+    return pd.DataFrame(rows)
 
-    @staticmethod
-    def calc_store_rank(df, year, month):
-        cur = df[(df['year'] == year) & (df['month'] == month)]
-        ss = cur.groupby('store').agg({'sales_amount': 'sum', 'guest_count': 'sum'}).reset_index()
-        ss['market_share'] = ss['sales_amount'] / ss['sales_amount'].sum() * 100
-        ss['avg_price'] = (ss['sales_amount'] * 10000 / ss['guest_count']).round(0)
-        last = df[(df['year'] == year - 1) & (df['month'] == month)].groupby('store')['sales_amount'].sum()
-        ss['yoy'] = ss['store'].apply(
-            lambda x: ((ss[ss['store'] == x]['sales_amount'].values[0] - last.get(x, 0))
-                       / last.get(x, 1) * 100)
-        )
-        return ss.sort_values('sales_amount', ascending=False)
-
-    @staticmethod
-    def calc_yoy_trend(df, by_store=None):
-        data = df[df['store'] == by_store].copy() if by_store else df.copy()
-        data = data.groupby(['year', 'month']).agg(
-            {'sales_amount': 'sum', 'guest_count': 'sum'}
-        ).reset_index()
-        data['sales_yoy'] = data.groupby('month')['sales_amount'].pct_change() * 100
-        data['guest_yoy'] = data.groupby('month')['guest_count'].pct_change() * 100
-        return data
-
-# ============================================================
-# 图表
-# ============================================================
-class ChartBuilder:
-    @staticmethod
-    def sales_trend(df, title="销售额趋势"):
-        return px.line(
-            df, x='month', y='sales_amount', color='year',
-            title=title, markers=True,
-            labels={'month': '月份', 'sales_amount': '销售额（亿元）', 'year': '年份'}
-        ).update_layout(hovermode='x unified')
-
-    @staticmethod
-    def store_bar(df, title="各店销售额"):
-        return px.bar(
-            df, x='store', y='sales_amount', title=title,
-            color='sales_amount', color_continuous_scale='Blues',
-            text_auto='.2f'
-        ).update_xaxes(tickangle=45)
-
-    @staticmethod
-    def yoy_bar(df, title="同比增长率"):
-        df = df.copy()
-        df['color'] = df['yoy'].apply(lambda x: '增长' if x >= 0 else '下降')
-        return px.bar(
-            df, x='store', y='yoy', title=title, color='color',
-            color_discrete_map={'增长': '#2ecc71', '下降': '#e74c3c'},
-            text_auto='.1f'
-        ).add_hline(y=0, line_dash="dash", line_color="gray").update_xaxes(tickangle=45)
-
-    @staticmethod
-    def pie_chart(df, title="市场份额"):
-        return px.pie(df, values='sales_amount', names='store', title=title)
 
 # ============================================================
 # UI
 # ============================================================
 def main():
-    st.title("🌴 海南免税市场行情分析系统")
+    st.title("🌴 海南免税市场分析（真实公开数据版）")
+    st.caption("数据来源：海口海关 / 海南省商务厅 / 中国中免年报 ｜ 仅展示公开可溯源的真实数据，查不到的一律标注「无公开数据」")
+
+    pdf = build_province_df()
+    sdf = build_store_df()
+
+    # ---- 顶部概览指标 ----
+    latest = pdf.iloc[-1]
+    prev = pdf.iloc[-2] if len(pdf) > 1 else None
+    st.subheader(f"📊 最新年度概览：{int(latest['year'])} 年")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("全省销售额", f"{latest['sales']:.1f} 亿",
+              f"{latest['sales_yoy']:+.1f}%" if pd.notna(latest['sales_yoy']) else None)
+    if pd.notna(latest['guests']):
+        c2.metric("购物人数", f"{latest['guests']:.0f} 万",
+                  f"{latest['guests_yoy']:+.1f}%" if pd.notna(latest['guests_yoy']) else None)
+    else:
+        c2.metric("购物人数", "未公开")
+    if prev is not None:
+        c3.metric("上一年销售额", f"{prev['sales']:.1f} 亿")
+        peak = pdf.loc[pdf['sales'].idxmax()]
+        c4.metric("历史峰值", f"{peak['sales']:.1f} 亿（{int(peak['year'])}）")
     st.markdown("---")
 
-    if 'df_sales' not in st.session_state:
-        st.session_state.df_sales, st.session_state.df_events = DataManager.load_data()
-
-    df_sales, df_events = st.session_state.df_sales, st.session_state.df_events
-    analyzer, chart = MarketAnalyzer(), ChartBuilder()
-
-    # ---- 数据状态提示 ----
-    all_years = sorted(df_sales['year'].unique(), reverse=True)
-    latest_year = all_years[0] if all_years else None
-    latest_month = None
-    data_status_lines = []
-    for yr in sorted(all_years):
-        avail_months = DataManager.get_available_months(df_sales, yr)
-        if len(avail_months) == 12:
-            data_status_lines.append(f"✅ {yr}年：完整12个月")
-        else:
-            month_str = "、".join([f"{m}月" for m in avail_months])
-            data_status_lines.append(f"⚠️ {yr}年：仅{month_str}有数据")
-        if yr == latest_year and len(avail_months) > 0:
-            latest_month = max(avail_months)
-
-    with st.expander("📌 数据状态 (点击展开)", expanded=False):
-        st.markdown("**各年份数据覆盖情况（仅展示有真实数据的月份）：**")
-        for line in data_status_lines:
-            st.markdown(line)
-        if latest_year and latest_month:
-            st.info(
-                f"🔔 最新数据：{latest_year}年{latest_month}月 | "
-                f"如果2026年暂无真实数据，年份选择器中不会出现2026。"
-            )
-        else:
-            st.warning("⚠️ 当前没有任何数据，请检查数据配置。")
-
-    with st.sidebar:
-        st.header("⚙️ 控制面板")
-        years = all_years  # 已按倒序排列
-        if not years:
-            st.error("没有可用数据，请检查 DataManager.get_real_data() 的配置。")
-            st.stop()
-
-        # 默认选择最新年份
-        default_year_idx = 0
-        y = st.selectbox("分析年份", years, index=default_year_idx)
-
-        # 根据年份动态显示有数据的月份
-        avail_months_for_year = DataManager.get_available_months(df_sales, y)
-        if not avail_months_for_year:
-            st.warning(f"{y}年没有可用数据，请选择其他年份。")
-            m = st.selectbox("分析月份", [1])
-            st.stop()
-        else:
-            # 默认选中最新的有数据月份
-            default_month = max(avail_months_for_year)
-            default_month_idx = (
-                avail_months_for_year.index(default_month)
-                if default_month in avail_months_for_year
-                else 0
-            )
-            m = st.selectbox(
-                "分析月份",
-                avail_months_for_year,
-                index=default_month_idx,
-                format_func=lambda x: f"{x}月"
-            )
-
-        c1, c2 = st.columns(2)
-        with c1:
-            if st.button("🔄 刷新"):
-                st.session_state.df_sales, st.session_state.df_events = DataManager.refresh_data()
-                st.success("已刷新！")
-                st.rerun()
-        with c2:
-            if st.button("🌐 360新闻"):
-                with st.spinner("爬取中..."):
-                    news = WebCrawler.search_news()
-                    if news:
-                        data = WebCrawler.extract_data(news)
-                        st.session_state.news_data = data
-                        st.success(f"✅ {len(news)}条新闻")
-                        with st.expander("📰 查看结果", expanded=True):
-                            for d in data:
-                                s = (
-                                    f"💰 {d['sales_amount']}{d['unit']}"
-                                    if d['sales_amount']
-                                    else ""
-                                )
-                                dt = (
-                                    f"📅 {d['year']}年{d['month']}月"
-                                    if d['year']
-                                    else ""
-                                )
-                                st.write(f"**{d['title']}**  {s} {dt} | {d['tags']}")
-                    else:
-                        st.warning("未找到新闻")
-
-    s = analyzer.calc_summary(df_sales, y, m)
-    st.subheader(f"📊 {y}年{m}月 海南免税概览")
-
-    a, b, c, d, e = st.columns(5)
-    a.metric("当月销售额", f"{s['cur_sales']:.1f}亿", f"{s['sales_yoy']:+.1f}%")
-    b.metric("YTD销售额", f"{s['ytd_sales']:.1f}亿", f"{s['ytd_growth']:+.1f}%")
-    c.metric("当月客流", f"{s['cur_guests']:.0f}万人次", f"{s['guest_yoy']:+.1f}%")
-    d.metric("人均消费", f"{s['avg_price']:.0f}元")
-    t = df_sales[df_sales['year'] == y - 1]['sales_amount'].sum() * 1.15
-    e.metric("全年进度", f"{s['ytd_sales'] / t * 100:.1f}%" if t else "0%")
-
-    t1, t2, t3, t4, t5 = st.tabs([
-        "📈市场趋势", "🏪各店对比", "👥客流分析",
-        "🎉活动监控", "📋分析报告"
+    t1, t2, t3, t4 = st.tabs([
+        "📈 全省年度趋势", "🏪 中免门店年度实况", "🆕 最新动态（2026）", "📋 数据来源与缺口"
     ])
 
+    # ---------- Tab 1：全省年度趋势 ----------
     with t1:
-        st.subheader("市场大趋势")
-        ry = [x for x in [y, y - 1, y - 2] if x >= df_sales['year'].min()]
-        mt = df_sales[df_sales['year'].isin(ry)].groupby(
-            ['year', 'month']
-        ).agg({'sales_amount': 'sum', 'guest_count': 'sum'}).reset_index()
-        col1, col2 = st.columns(2)
-        with col1:
-            st.plotly_chart(chart.sales_trend(mt), use_container_width=True)
-        with col2:
-            yy = analyzer.calc_yoy_trend(df_sales)
-            yy = yy[yy['year'] == y]
-            if len(yy) > 0:
-                fig = px.bar(
-                    yy, x='month', y='sales_yoy',
-                    title=f"{y}年各月同比增长率",
-                    color=yy['sales_yoy'].apply(
-                        lambda x: '增长' if x and x >= 0 else '下降'
-                    ),
-                    color_discrete_map={'增长': '#2ecc71', '下降': '#e74c3c'},
-                    text_auto='.1f'
-                )
-                fig.add_hline(y=0, line_dash="dash", line_color="gray")
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("该年份暂无同比数据")
+        st.subheader("全省离岛免税年度趋势（真实数据）")
+        fig = go.Figure()
+        fig.add_bar(
+            x=pdf["year"], y=pdf["sales"],
+            name="销售额（亿元）", marker_color="#3498db",
+            text=pdf["sales"].round(1), textposition="outside",
+        )
+        fig.add_trace(go.Scatter(
+            x=pdf["year"], y=pdf["guests"],
+            name="购物人数（万人次）", yaxis="y2",
+            mode="lines+markers", line=dict(color="#e67e22", width=3),
+        ))
+        fig.update_layout(
+            yaxis=dict(title="销售额（亿元）"),
+            yaxis2=dict(title="购物人数（万）", overlaying="y", side="right"),
+            hovermode="x unified", legend=dict(orientation="h"),
+        )
+        st.plotly_chart(fig, use_container_width=True)
 
-        st.subheader("📊 YTD对比")
-        cum_data = []
-        for yr in [y - 1, y]:
-            if yr not in df_sales['year'].unique():
-                continue
-            yd = df_sales[df_sales['year'] == yr]
-            cum = 0
-            for mo in range(1, 13):
-                month_sum = yd[yd['month'] == mo]['sales_amount'].sum()
-                cum += month_sum
-                cum_data.append({'year': yr, 'month': mo, 'cum_sales': cum})
-        if cum_data:
-            cum_df = pd.DataFrame(cum_data)
-            years_in_cum = cum_df['year'].unique()
-            fig = go.Figure()
-            colors = ['#3498db', '#95a5a6', '#e74c3c']
-            for i, yr in enumerate(sorted(years_in_cum, reverse=True)):
-                yd = cum_df[cum_df['year'] == yr]
-                dash = 'solid' if yr == y else 'dash'
-                fig.add_trace(go.Scatter(
-                    x=yd['month'], y=yd['cum_sales'],
-                    mode='lines+markers', name=f'{yr}年',
-                    line=dict(color=colors[i % len(colors)], width=3, dash=dash)
-                ))
-            fig.update_layout(title="累计销售额对比")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("暂无YTD对比数据")
+        st.subheader("逐年明细（含同比）")
+        show = pdf.copy()
+        show["year"] = show["year"].astype(int)
+        show["销售额(亿)"] = show["sales"].round(1)
+        show["购物人数(万)"] = show["guests"].apply(lambda x: f"{x:.0f}" if pd.notna(x) else "未公开")
+        show["销售额同比"] = show["sales_yoy"].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) else "—")
+        show["人数同比"] = show["guests_yoy"].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) else "—")
+        st.dataframe(show[["year", "销售额(亿)", "销售额同比", "购物人数(万)", "人数同比"]],
+                     use_container_width=True, hide_index=True)
 
+        st.info(
+            "📌 说明：2019–2024 为海口海关监管的“离岛免税购物金额”；"
+            "2025 为海南省商务厅公布的“12 家离岛免税店总销售额”（含免税+有税，口径略宽），客流未公开。"
+        )
+
+    # ---------- Tab 2：中免门店年度实况 ----------
     with t2:
-        st.subheader("各免税店对比")
-        vt = st.radio("维度", ["当月", "YTD累计", "年度趋势"], horizontal=True)
-        if vt == "当月":
-            ss = analyzer.calc_store_rank(df_sales, y, m)
-            col1, col2 = st.columns([3, 2])
-            with col1:
-                st.plotly_chart(chart.store_bar(ss), use_container_width=True)
-            with col2:
-                st.plotly_chart(chart.pie_chart(ss), use_container_width=True)
-            st.plotly_chart(chart.yoy_bar(ss), use_container_width=True)
-        elif vt == "YTD累计":
-            ys = df_sales[(df_sales['year'] == y) & (df_sales['month'] <= m)].groupby(
-                'store'
-            )['sales_amount'].sum().reset_index()
-            ls = df_sales[(df_sales['year'] == y - 1) & (df_sales['month'] <= m)].groupby(
-                'store'
-            )['sales_amount'].sum()
-            ys['yoy'] = ys['store'].apply(
-                lambda x: (
-                    (ys[ys['store'] == x]['sales_amount'].values[0] - ls.get(x, 0))
-                    / ls.get(x, 1) * 100
-                )
-            )
-            st.plotly_chart(
-                chart.store_bar(ys.sort_values('sales_amount')),
-                use_container_width=True
-            )
-        else:
-            sel = st.selectbox("门店", STORES)
-            sd = df_sales[df_sales['store'] == sel].groupby(
-                ['year', 'month']
-            )['sales_amount'].sum().reset_index()
-            rd = [x for x in [y, y - 1, y - 2] if x >= sd['year'].min()]
-            if len(rd) > 0:
-                fig = px.line(
-                    sd[sd['year'].isin(rd)], x='month', y='sales_amount',
-                    color='year', title=f"{sel} 月度趋势", markers=True
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info("暂无趋势数据")
+        st.subheader("中免旗下门店 / 子公司 年度营业收入（中国中免年报）")
+        st.caption("⚠️ 这是集团年报口径的「营业收入」（含免税+有税），是公开渠道最贴近门店真实经营的数据；"
+                   "非中免体系的其他免税店无公开年度数据，见“数据来源与缺口”页。")
 
+        fig = px.bar(
+            sdf, x="store", y="revenue", color="year",
+            barmode="group", text_auto=".1f",
+            labels={"store": "门店 / 主体", "revenue": "营业收入（亿元）", "year": "年份"},
+            title="各门店年度营业收入对比",
+        )
+        fig.update_xaxes(tickangle=20)
+        st.plotly_chart(fig, use_container_width=True)
+
+        st.subheader("逐年明细与同比")
+        sd = sdf.copy()
+        sd["revenue"] = sd["revenue"].round(2)
+        sd["yoy"] = sd["yoy"].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) else "首年/无对比")
+        st.dataframe(
+            sd[["store", "year", "revenue", "yoy"]].rename(columns={"revenue": "营业收入(亿)"}),
+            use_container_width=True, hide_index=True,
+        )
+
+        st.warning(
+            "🚫 以下经营主体【无公开年度门店营收数据】，故不展示数字（不编造）：\n"
+            + "、".join(OTHER_OPERATORS)
+        )
+
+    # ---------- Tab 3：最新动态（2026 封关后） ----------
     with t3:
-        st.subheader("客流分析")
-        gt = df_sales.groupby(['year', 'month'])['guest_count'].sum().reset_index()
-        ry = [x for x in [y, y - 1, y - 2] if x >= gt['year'].min()]
-        if len(gt[gt['year'].isin(ry)]) > 0:
-            fig = px.line(
-                gt[gt['year'].isin(ry)], x='month', y='guest_count',
-                color='year', title="月度客流趋势（万人次）", markers=True
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("暂无客流趋势数据")
+        st.subheader("🆕 最新动态（2026 年，封关后）")
+        st.caption("⚠️ 以下为最新公开数据，但属「年内累计 / 部分时段」，非完整年度，不参与年度同比。")
+        for period, d in LATEST.items():
+            c1, c2 = st.columns(2)
+            c1.metric(period, f"{d['sales']:.1f} 亿",
+                       f"{d['sales_yoy']:+.1f}%" if d.get('sales_yoy') is not None else None)
+            c2.metric("购物人数", f"{d['guests']:.0f} 万",
+                       f"{d['guests_yoy']:+.1f}%" if d.get('guests_yoy') is not None else None)
+            st.info(f"📌 {d.get('note', '')}")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            sg = df_sales[
-                (df_sales['year'] == y) & (df_sales['month'] == m)
-            ].groupby('store')['guest_count'].sum().reset_index().sort_values(
-                'guest_count', ascending=False
-            )
-            if len(sg) > 0:
-                fig = px.bar(
-                    sg, x='store', y='guest_count',
-                    title=f"{y}年{m}月各店客流", color='guest_count',
-                    color_continuous_scale='Oranges', text_auto='.0f'
-                )
-                fig.update_xaxes(tickangle=45)
-                st.plotly_chart(fig, use_container_width=True)
-        with col2:
-            sa = df_sales[
-                (df_sales['year'] == y) & (df_sales['month'] == m)
-            ].groupby('store').agg(
-                {'sales_amount': 'sum', 'guest_count': 'sum'}
-            ).reset_index()
-            if len(sa) > 0:
-                sa['avg'] = (sa['sales_amount'] * 10000 / sa['guest_count']).round(0)
-                fig = px.bar(
-                    sa.sort_values('avg'), x='store', y='avg',
-                    title="各店人均消费（元）", color='avg',
-                    color_continuous_scale='Reds', text_auto='.0f'
-                )
-                fig.update_xaxes(tickangle=45)
-                st.plotly_chart(fig, use_container_width=True)
+        st.info(
+            "补充背景：自 2025-12-18 海南自贸港封关、离岛免税新政落地 至 2026-04-30，"
+            "海口海关累计监管离岛免税购物金额 222.2 亿元、购物人数 297.3 万人次"
+            "（同比 +22.6% / +9.4%），为封关后首段完整窗口数据。"
+        )
 
+    # ---------- Tab 4：数据来源与缺口 ----------
     with t4:
-        st.subheader("活动监控")
-        ce = df_events[df_events['year'] == y]
-        if len(ce) > 0:
-            for store in STORES:
-                se = ce[ce['store'] == store]
-                if len(se) > 0:
-                    with st.expander(f"🏪 {store} - {len(se)}个活动"):
-                        for _, ev in se.iterrows():
-                            st.write(
-                                f"📅 {ev['event_name']} "
-                                f"({ev['start_month']}月-{ev['end_month']}月)"
-                            )
-        else:
-            st.info(f"{y}年暂无活动数据（如果2026年有真实活动，请在 known 字典中配置）")
+        st.subheader("📚 数据来源（点击可核对原文）")
+        for name, url in SOURCES:
+            st.markdown(f"- [{name}]({url})")
 
-        # 手动添加活动功能
-        with st.form("add_event"):
-            st.markdown("**手动添加活动记录**")
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                es = st.selectbox("门店", STORES)
-            with col2:
-                en = st.text_input("活动名称", "促销活动")
-            with col3:
-                sm = st.number_input("开始月份", 1, 12, m)
-                em = st.number_input("结束月份", 1, 12, min(m + 1, 12))
-            if st.form_submit_button("添加"):
-                ne = pd.DataFrame([{
-                    'year': y, 'store': es, 'event_name': en,
-                    'start_month': sm, 'end_month': em
-                }])
-                df_events = pd.concat([df_events, ne], ignore_index=True)
-                st.session_state.df_events = df_events
-                DataManager.save_data(df_sales, df_events)
-                st.success("已添加！")
-                st.rerun()
+        st.subheader("⚪ 当前「无公开数据」的缺口")
+        st.markdown(
+            "以下维度在公开渠道查不到真实数据，本模块**不展示、不估算**：\n"
+            "- **月度门店级数据**：海关只公布全省月度/年度总额，中免年报只到年度/区域，门店月度真实销售查不到。\n"
+            "- **非中免门店年度营收**：海旅免税城、中服免税店、深免海口观澜湖店、万宁王府井免税港、海发控全球精品免税城 均无公开年度数字（仅有个别节假日增速，不足以复原全年）。\n"
+            "- **2025 年购物人数**：商务厅只公布了总销售额 475.2 亿，未公布对应客流。\n"
+            "- **2022 年海口国际免税城**：2022 年 10 月才开业，年报无完整年度营收。"
+        )
 
-    with t5:
-        st.subheader("📋 分析报告")
-        if st.button("🔄 生成", type="primary"):
-            ss = analyzer.calc_store_rank(df_sales, y, m)
-            r = [
-                f"# 🌴 海南免税市场分析报告",
-                f"**期间**: {y}年1-{m}月",
-                f"**生成**: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-                "",
-                "## 一、市场总览（真实数据）",
-                (f"- {y}年{m}月: {s['cur_sales']:.1f}亿 "
-                 f"({'↑' if s['sales_yoy'] >= 0 else '↓'}"
-                 f"{abs(s['sales_yoy']):.1f}%)"),
-                (f"- YTD: {s['ytd_sales']:.1f}亿 "
-                 f"({'↑' if s['ytd_growth'] >= 0 else '↓'}"
-                 f"{abs(s['ytd_growth']):.1f}%)"),
-                f"- 客流: {s['cur_guests']:.0f}万人次",
-                "",
-                "## 二、各店排名",
-            ]
-            for i, (_, row) in enumerate(ss.iterrows(), 1):
-                r.append(
-                    f"{i}. {row['store']}: {row['sales_amount']:.2f}亿 "
-                    f"({row['market_share']:.1f}%)"
-                )
-            r.extend(["", "## 三、结论"])
-            r.append(
-                f"1. {'快速增长' if s['sales_yoy'] > 10 else '稳步增长' if s['sales_yoy'] > 0 else '回落'}"
-            )
-            r.append(f"2. 领先: {ss.iloc[0]['store']}")
-            rt = '\n'.join(r)
-            st.markdown(rt)
-            b64 = base64.b64encode(rt.encode()).decode()
-            st.markdown(
-                f'<a href="data:text/plain;base64,{b64}" '
-                f'download="海南免税报告_{y}{m:02d}.md">📥 下载报告</a>',
-                unsafe_allow_html=True
-            )
-
-    st.caption(
-        f"📊 {datetime.now().strftime('%Y-%m-%d %H:%M')} | "
-        f"数据来源: 海口海关/中免年报 | "
-        f"{df_sales['store'].nunique()}家门店 | "
-        f"最新数据截至: {latest_year}年{latest_month}月"
-    )
+        st.subheader("🛠️ 如何补充真实数据")
+        st.markdown(
+            "1. 打开本文件，找到顶部【真实数据区】。\n"
+            "2. 全省数据加在 `PROVINCE` 字典：例如 `2026: {\"sales\": 500.0, \"guests\": 700.0}`。\n"
+            "3. 门店数据加在 `STORES` 字典对应门店下，年份用数字、金额用亿元。\n"
+            "4. 新增来源请同步加到 `SOURCES` 列表，保留链接以便核对。\n"
+            "5. 保存后刷新 Streamlit 页面即可生效。**请勿填入未经核实的估算值。**"
+        )
 
 
 if __name__ == "__main__":
