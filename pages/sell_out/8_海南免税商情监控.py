@@ -8,6 +8,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import os
+import re
 from datetime import datetime
 from utils.hainan_scraper import HainanScraper, AIRPORT_DB
 from utils.hainan_2026_data import HA_DF_2026, AIRPORT_INTL, SOURCE_NOTE
@@ -66,7 +68,9 @@ today = data.get("date", datetime.now().strftime("%Y-%m-%d"))
 total_news = sum(len(data.get(k, [])) for k in
                  ["airport_news", "duty_free_news", "li_island_news", "policy_news", "travel_news"])
 st.success(f"📅 新闻更新于: {today}  |  共 {total_news} 条新闻")
-st.info(f"💰 海关月报：{st.session_state.get('customs_msg', '')}")
+_cn, _mt = customs_folder_stats()
+_fresh = f" ｜ 📁 本地月报 {_cn} 个，最新更新 {_mt}" if _cn else " ｜ ⚠️ 未找到本地月报 xlsx/"
+st.info(f"💰 海关月报：{st.session_state.get('customs_msg', '')}{_fresh}")
 
 # ============================================================
 # 安全取值函数
@@ -152,6 +156,20 @@ def build_analysis_months(hardcoded, by_ym):
                      "pax26": pax26, "pax25": pax25, "pieces26": pc26,
                      "yoy": yoy, "src": src})
     return rows
+
+
+def customs_folder_stats(folder=None):
+    """返回 (xlsx文件数, 最新文件修改时间字符串)，用于页面显示数据时效。"""
+    folder = os.path.abspath(folder or XLSX_DIR)
+    if not os.path.isdir(folder):
+        return 0, None
+    xs = [f for f in os.listdir(folder)
+          if f.lower().endswith(".xlsx") and not f.startswith("~")]
+    if not xs:
+        return 0, None
+    latest = max(xs, key=lambda f: os.path.getmtime(os.path.join(folder, f)))
+    mt = os.path.getmtime(os.path.join(folder, latest))
+    return len(xs), datetime.fromtimestamp(mt).strftime("%Y-%m-%d %H:%M")
 
 # ============================================================
 # 模块一：海南离岛免税商情（2026 官方维度）
