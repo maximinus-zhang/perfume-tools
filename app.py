@@ -13,10 +13,11 @@ st.set_page_config(
 # ============================================================
 sell_out = [
     st.Page("pages/sell_out/11_销售看板.py",        title="销售看板",        icon="📊"),
-    st.Page("pages/sell_out/6_海南免税市场分析.py",  title="海南免税市场分析", icon="🏝️"),
+    st.Page("pages/sell_out/6_海南免税市场分析.py",  title="海南本地市场分析", icon="🏝️"),
     st.Page("pages/sell_out/7_门店地图分析.py",      title="门店地图分析",    icon="🗺️"),
     st.Page("pages/sell_out/10_库存预警.py",         title="库存预警",        icon="⚠️"),
-st.Page("pages/sell_out/8_海南免税商情监控.py",  title="机场+海南商情监控", icon="📡"),
+st.Page("pages/sell_out/8_全国免税商情监控.py",  title="机场+海南商情监控", icon="📡"),
+    st.Page("pages/sell_out/12_商情监控看板.py",  title="免税商情看板",     icon="📈"),
 
 ]
 
@@ -40,6 +41,7 @@ st.Page("pages/sell_in/2_发货明细生成工具.py", title="发货明细生成
 # ============================================================
 logistics = [
     st.Page("pages/logistics/33_物流看板.py",  title="物流看板",   icon="🚚"),
+    st.Page("pages/logistics/34_物流跟踪.py",  title="发货物流跟踪", icon="📍"),
     st.Page("pages/logistics/9_订单管理.py",   title="订单管理",   icon="📦"),
 ]
 
