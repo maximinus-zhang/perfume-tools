@@ -21,6 +21,20 @@ from utils.news_analyzer import (
 st.set_page_config(page_title="全国免税商情监控 2026", page_icon="🏝️", layout="wide")
 
 # ============================================================
+# 全局指标：用于新闻量化交叉验证 & 深度分析
+# ============================================================
+_yd = HA_DF_2026["ytd"]
+HAINAN_METRICS = {
+    "h1_amount": float(_yd["amount_2026"]),
+    "h1_pax": float(_yd["pax_2026"]),
+    "h1_pieces": float(_yd["pieces_2026"]),
+    "h1_months": 6,
+    "amt_yoy": float(_yd["amt_yoy"]),
+    "pax_yoy": float(_yd["pax_yoy"]),
+    "pc_yoy": float(_yd["pc_yoy"]),
+}
+
+# ============================================================
 # 顶部
 # ============================================================
 
@@ -30,20 +44,20 @@ st.caption("📊 海南离岛免税：海口海关/新华社/央视/海南特区
 col1, col2 = st.columns([3, 1])
 with col2:
     st.markdown("**🔄 数据刷新**")
-    if st.button("重新解析本地月报", width='stretch', key="btn_parse"):
+    if st.button("重新解析本地月报", use_container_width=True, key="btn_parse"):
         by_ym, recs = build_monthly_from_xlsx()
         st.session_state["customs_by_ym"] = by_ym
         st.session_state["customs_recs"] = recs
         st.session_state["customs_msg"] = f"已重新解析本地 xlsx/：{len(recs)} 个月报"
         st.rerun()
-    if st.button("⬇️ 在线抓取最新(需调试Chrome)", width='stretch', key="btn_fetch"):
+    if st.button("⬇️ 在线抓取最新(需调试Chrome)", use_container_width=True, key="btn_fetch"):
         ok, msg = try_cdp_fetch()
         by_ym, recs = build_monthly_from_xlsx()
         st.session_state["customs_by_ym"] = by_ym
         st.session_state["customs_recs"] = recs
         st.session_state["customs_msg"] = ("✅ " if ok else "⚠️ ") + msg
         st.rerun()
-    if st.button("📰 刷新新闻", width='stretch', key="btn_news"):
+    if st.button("📰 刷新新闻", use_container_width=True, key="btn_news"):
         st.cache_data.clear()
         st.rerun()
 
@@ -97,9 +111,11 @@ def all_news_items(data):
 
 
 def show_insight(context, max_bullets=3):
-    """在模块下方渲染新闻自动分析备注（失败不阻断页面）。"""
+    """在模块下方渲染新闻自动分析备注（带官方 H1 量化交叉验证）"""
     try:
-        bullets = analyze_news_for_context(all_news_items(data), context, max_bullets=max_bullets)
+        bullets = analyze_news_for_context(
+            all_news_items(data), context, max_bullets=max_bullets, metrics=HAINAN_METRICS
+        )
         md = render_insight_markdown(bullets)
         st.markdown(md)
     except Exception as e:
@@ -268,7 +284,7 @@ qd = pd.DataFrame(q_rows)
 q_show = qd[["q", "amt26", "amt25", "yoy", "pax26", "pax25", "yoy_pax", "amt_src", "note"]].copy()
 q_show.columns = ["季度", "2026金额", "2025金额", "金额同比%", "2026人数", "2025人数", "人数同比%",
                    "数据来源", "说明"]
-st.dataframe(q_show, width='stretch', hide_index=True)
+st.dataframe(q_show, use_container_width=True, hide_index=True)
 show_insight("quarterly", max_bullets=3)
 
 st.markdown("**📅 月度 YTD 进度（亿元 / 万人次）**")
@@ -282,7 +298,7 @@ if "src" in m_show:
     m_show["来源"] = m_show["src"].map(lambda s: badge(s))
 m_show = m_show[["m", "amt26", "amt25", "pax26", "pax25", "来源"]]
 m_show.columns = ["月份", "2026金额", "2025金额", "2026人数", "2025人数", "来源标注"]
-st.dataframe(m_show, width='stretch', hide_index=True)
+st.dataframe(m_show, use_container_width=True, hide_index=True)
 st.caption("💡 1–5月为海关《离岛免税销售情况表》XLSX 真实值（🟢XLSX实时）；6月=H1−Σ1-5 反推；H1/Q1为官方累计口径。点右上『重新解析本地月报』可刷新。")
 show_insight("monthly", max_bullets=3)
 
@@ -291,7 +307,7 @@ st.markdown("**🎪 重要消费节点（2026 · 官方）**")
 ed = pd.DataFrame(HA_DF_2026["events_2026"])
 ed_show = ed[["name", "period", "amt", "pax", "pieces", "yoy", "src"]].copy()
 ed_show.columns = ["节点", "时间", "金额(亿)", "人次(万)", "件数(万)", "金额同比%", "来源"]
-st.dataframe(ed_show, width='stretch', hide_index=True)
+st.dataframe(ed_show, use_container_width=True, hide_index=True)
 
 # 政策动销
 with st.expander("📜 政策动销（2025-11-01 新政 + 封关）"):
@@ -357,7 +373,7 @@ for _, r in amdf.iterrows():
 aspdf = pd.DataFrame(asp_rows)
 if not aspdf.empty:
     st.line_chart(aspdf.set_index("月份")[["客单价(元/人)", "件单价(元/件)"]], height=320)
-    st.dataframe(aspdf, width='stretch', hide_index=True)
+    st.dataframe(aspdf, use_container_width=True, hide_index=True)
     st.caption("⚠️ 2月/6月缺人次数据，未计入。客单价=金额÷人次；件单价=金额÷件数。")
 else:
     st.info("暂无可计算客单价的月份（需同时有人次与件数）")
@@ -387,7 +403,7 @@ st.markdown(f"- **季度拆解**：Q1 金额 +{q1['yoy']}% → Q2 骤降至 +{q2
              f"5月金额同比仅 +0.4% 且件数 −4.9%，增长明显走平。")
 if full_2025:
     st.markdown(f"- **2025 全年基数**：{full_2025:.1f} 亿（取自 2025M12 海关累计）；H1 {h1_2025} + H2 {h2_2025:.1f}。")
-    st.dataframe(projdf, width='stretch', hide_index=True)
+    st.dataframe(projdf, use_container_width=True, hide_index=True)
     st.caption("📌 情景测算基于『H2 2026 相对 H2 2025 给定增速』，仅作计划参考；实际受新政红利衰减、暑期/国庆旺季及补库节奏影响。")
 else:
     st.warning("未解析到 2025M12 累计，无法测算全年情景（请确认 xlsx/ 含 2025M12.xlsx）")
@@ -404,6 +420,133 @@ st.info(
 show_insight("monthly", max_bullets=3)
 
 # ============================================================
+# 模块一·附二：数据诊断与行动建议（DataAnalyticsReporter 增强）
+# ============================================================
+
+st.markdown("---")
+st.subheader("🎯 数据诊断与行动建议")
+
+# ---------- 1) H1 增长量价拆解 ----------
+amt26, amt25 = _yd["amount_2026"], _yd["amount_2025"]
+pax26, pax25 = _yd["pax_2026"], _yd["pax_2025"]
+pc26, pc25 = _yd["pieces_2026"], _yd["pieces_2025"]
+
+asp26 = amt26 * 10000 / pax26 if pax26 else None
+asp25 = amt25 * 10000 / pax25 if pax25 else None
+asp_yoy = (asp26 / asp25 - 1) * 100 if asp25 else None
+
+ppc26 = pc26 / pax26 if pax26 else None
+ppc25 = pc25 / pax25 if pax25 else None
+ppc_yoy = (ppc26 / ppc25 - 1) * 100 if ppc25 else None
+
+app26 = amt26 * 10000 / pc26 if pc26 else None
+app25 = amt25 * 10000 / pc25 if pc25 else None
+app_yoy = (app26 / app25 - 1) * 100 if app25 else None
+
+st.markdown("**📊 H1 增长量价拆解**")
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    st.metric("H1 销售额同比", f"+{_yd['amt_yoy']:.1f}%")
+with c2:
+    st.metric("客流贡献", f"+{_yd['pax_yoy']:.1f}pp",
+              help="客流增长对销售额增长的直接拉动（忽略结构变化）")
+with c3:
+    st.metric("客单价贡献", f"+{asp_yoy:.1f}pp",
+              help=f"客单价 {asp25:.0f}元 → {asp26:.0f}元，与客流相乘近似解释总增长")
+with c4:
+    st.metric("人均件数变化", f"{ppc_yoy:+.1f}%",
+              help=f"人均购买件数 {ppc25:.2f}件 → {ppc26:.2f}件；件单价 {app25:.0f}元 → {app26:.0f}元(+{app_yoy:.1f}%)")
+
+st.markdown(
+    f"- **核心结论**：H1 +{_yd['amt_yoy']:.1f}% 主要由客流 (+{_yd['pax_yoy']:.1f}%) 与客单价 (+{asp_yoy:.1f}%) 双轮驱动；"
+    f"但人均件数下降 {abs(ppc_yoy):.1f}%，意味着增长并非来自‘买更多件’，而是来自**件单价提升 {app_yoy:.1f}%**（品类上移或折扣收窄）。"
+)
+
+# ---------- 2) 月度趋势诊断 ----------
+st.markdown("**📉 月度趋势诊断**")
+# 计算逐月同比、环比
+_diag_rows = []
+for i, r in amdf.iterrows():
+    if r["amt26"] is None:
+        continue
+    yoy_amt = r["yoy"] if pd.notna(r["yoy"]) else None
+    mom_amt = None
+    if i > 0:
+        prev = amdf.iloc[i - 1]
+        if prev["amt26"] and prev["amt26"] > 0:
+            mom_amt = (r["amt26"] - prev["amt26"]) / prev["amt26"] * 100
+    _diag_rows.append({
+        "月份": r["m"], "金额26": r["amt26"], "同比%": yoy_amt, "环比%": mom_amt,
+        "来源": r["src"],
+    })
+diag_df = pd.DataFrame(_diag_rows)
+
+# 异常判定：金额同比 < 5% 或 环比连续两月负
+low_yoy = diag_df[(diag_df["同比%"].notna()) & (diag_df["同比%"] < 5.0)]
+neg_mom_streak = 0
+for v in diag_df["环比%"].dropna():
+    neg_mom_streak = neg_mom_streak + 1 if v < 0 else 0
+
+with st.expander("查看月度诊断明细", expanded=False):
+    st.dataframe(
+        diag_df.style
+            .background_gradient(subset=["同比%"], cmap="RdYlGn", vmin=-10, vmax=50)
+            .background_gradient(subset=["环比%"], cmap="RdYlGn", vmin=-40, vmax=40),
+        hide_index=True, use_container_width=True,
+    )
+
+if not low_yoy.empty:
+    st.warning(
+        f"⚠️ **增速放缓信号**：{', '.join(low_yoy['月份'].tolist())} 金额同比增速低于 5%，"
+        f"其中 {low_yoy.iloc[-1]['月份']} 同比仅 {low_yoy.iloc[-1]['同比%']:+.1f}%。"
+        "Q2 增长动能明显弱于 Q1。"
+    )
+
+# ---------- 3) Q2 放缓归因 ----------
+st.markdown("**🔍 Q2 放缓归因**")
+q1_amt, q2_amt = q1["amt26"], q2["amt26"]
+q1_yoy, q2_yoy = q1["yoy"], q2["yoy"]
+q1_share = q1_amt / (q1_amt + q2_amt) * 100 if (q1_amt + q2_amt) else None
+q2_share = 100 - q1_share if q1_share else None
+
+st.markdown(
+    f"- **季度结构**：Q1 占 H1 金额 {q1_share:.1f}%（{q1_amt:.1f}亿，同比 +{q1_yoy:.1f}%），"
+    f"Q2 占 {q2_share:.1f}%（{q2_amt:.1f}亿，同比 +{q2_yoy:.1f}%）。"
+    f"Q1 的增量贡献约为 {(q1_amt - q1['amt25']):.1f}亿，Q2 增量仅约 {(q2_amt - q2['amt25']):.1f}亿。"
+)
+st.markdown(
+    f"- **归因判断**：Q2 放缓主要受**高基数 + 淡季效应 + 新政红利衰减**三重影响；"
+    f"5 月金额同比 +0.4% 但件数同比 −4.9%，件单价同比约 +5.6%，说明价格/结构因素部分对冲了量缩。"
+)
+
+# ---------- 4) 行动建议卡片 ----------
+st.markdown("**🎯 对香化采购 / 补货的建议**")
+rec_cols = st.columns(3)
+with rec_cols[0]:
+    st.info(
+        "**库存节奏**：Q2 已现量缩价升，H2 同比基数更高，建议按『中性情景』全年约 +12.6% 做滚动预测，"
+        "避免按 Q1 斜率线性外推导致库存积压。",
+        icon="📦",
+    )
+with rec_cols[1]:
+    st.info(
+        "**品类侧重**：人均件数下降、件单价上升，提示消费者更偏好高单价/高客单产品；"
+        "香化备货可适当向高价值 SKU 倾斜，减少低毛利走量款占比。",
+        icon="💄",
+    )
+with rec_cols[2]:
+    st.info(
+        "**观测窗口**：6 月为上半年低点，7–8 月暑运为关键验证期；"
+        "若 7 月金额同比仍低于 10%，需进一步下调 H2 预期并收紧补货。",
+        icon="📅",
+    )
+
+st.caption(
+    "📌 以上诊断基于海口海关 H1 官方数据与 XLSX 月度真实值；"
+    "件数/件单价因 2 月、6 月缺人次数据可能存在估算偏差。"
+)
+
+# ============================================================
 # 模块二：12大机场核心指标（2025 vs 2024）
 # ============================================================
 
@@ -412,7 +555,7 @@ st.subheader("🛫 全国12大机场核心指标 (2025年 CAAC数据)  —  2025
 
 airport_keys = list(AIRPORT_DB.keys())
 
-cols = st.columns(6)
+cols = st.columns(4)
 for i, code in enumerate(airport_keys[:6]):
     a25 = safe_info(code, "annual_2025", 0)
     a24 = safe_info(code, "annual_2024", 0)
@@ -420,29 +563,32 @@ for i, code in enumerate(airport_keys[:6]):
     growth = safe_info(code, "growth_pct", 0)
     dom = safe_info(code, "domestic_pct", "?")
     intl = safe_info(code, "international_pct", "?")
-    with cols[i]:
+    with cols[i % 4]:
         st.metric(
-            label=f"🛫 {code}",
+            label=f"{code}",
             value=f"{a25} 万",
-            delta=f"+{a25 - a24}万 (+{growth}%)  |  全国第{rank}",
-            help=f"2025: {a25}万 | 2024: {a24}万 | 增量: +{a25 - a24}万 | 国内 {dom}% | 国际 {intl}%"
+            delta=f"+{growth}% #{rank}",
+            help=f"2025: {a25}万 | 2024: {a24}万 | 增量: +{a25-a24}万 | 国内{dom}% 国际{intl}%"
         )
 
-cols = st.columns(6)
-for i, code in enumerate(airport_keys[6:]):
-    a25 = safe_info(code, "annual_2025", 0)
-    a24 = safe_info(code, "annual_2024", 0)
-    rank = safe_info(code, "rank", "?")
-    growth = safe_info(code, "growth_pct", 0)
-    dom = safe_info(code, "domestic_pct", "?")
-    intl = safe_info(code, "international_pct", "?")
-    with cols[i]:
-        st.metric(
-            label=f"🛫 {code}",
-            value=f"{a25} 万",
-            delta=f"+{a25 - a24}万 (+{growth}%)  |  全国第{rank}",
-            help=f"2025: {a25}万 | 2024: {a24}万 | 增量: +{a25 - a24}万 | 国内 {dom}% | 国际 {intl}%"
-        )
+# 第二行：剩余机场（第7-12个）
+remaining = airport_keys[6:]
+if remaining:
+    cols2 = st.columns(len(remaining))
+    for i, code in enumerate(remaining):
+        a25 = safe_info(code, "annual_2025", 0)
+        a24 = safe_info(code, "annual_2024", 0)
+        rank = safe_info(code, "rank", "?")
+        growth = safe_info(code, "growth_pct", 0)
+        dom = safe_info(code, "domestic_pct", "?")
+        intl = safe_info(code, "international_pct", "?")
+        with cols2[i]:
+            st.metric(
+                label=f"{code}",
+                value=f"{a25} 万",
+                delta=f"+{growth}% #{rank}",
+                help=f"2025: {a25}万 | 2024: {a24}万 | 增量: +{a25-a24}万 | 国内{dom}% 国际{intl}%"
+            )
 show_insight("airport_overview", max_bullets=3)
 
 # ============================================================
@@ -454,32 +600,33 @@ st.subheader("📈 机场年吞吐量对比: 2025(蓝) VS 2024(橙)  —  增量
 
 chart_data = pd.DataFrame({
     "机场": airport_keys,
-    "2025年(万人次)": [safe_info(k, "annual_2025", 0) for k in airport_keys],
-    "2024年(万人次)": [safe_info(k, "annual_2024", 0) for k in airport_keys],
-    "增量(万)": [safe_info(k, "annual_2025", 0) - safe_info(k, "annual_2024", 0) for k in airport_keys],
+    "2025": [safe_info(k, "annual_2025", 0) for k in airport_keys],
+    "2024": [safe_info(k, "annual_2024", 0) for k in airport_keys],
+    "增量": [safe_info(k, "annual_2025", 0) - safe_info(k, "annual_2024", 0) for k in airport_keys],
     "增长率(%)": [safe_info(k, "growth_pct", 0) for k in airport_keys],
 })
 
-col1, col2 = st.columns([3, 2])
-with col1:
-    st.bar_chart(chart_data, x="机场", y=["2025年(万人次)", "2024年(万人次)"],
-                 color=["#1E90FF", "#FF8C00"], height=450)
+# 图表独占一行，保证柱状图宽度充足
+st.bar_chart(chart_data, x="机场", y=["2025", "2024"],
+             color=["#1E90FF", "#FF8C00"], height=400)
 
-with col2:
-    growth_df = chart_data[["机场", "2025年(万人次)", "2024年(万人次)", "增量(万)", "增长率(%)"]].copy()
-    growth_df["增长率"] = growth_df["增长率(%)"].apply(lambda x: f"+{x}%" if x > 0 else f"{x}%")
-    st.dataframe(
-        growth_df.style
-            .highlight_max(subset=["增长率(%)"], color="#90EE90")
-            .highlight_min(subset=["增长率(%)"], color="#FFB3B3"),
-        width='stretch', hide_index=True,
-        column_config={
-            "2025年(万人次)": st.column_config.NumberColumn(format="%.0f"),
-            "2024年(万人次)": st.column_config.NumberColumn(format="%.0f"),
-            "增量(万)": st.column_config.NumberColumn(format="+%.0f"),
-            "增长率(%)": st.column_config.NumberColumn(format="%.1f%%"),
-        }
-    )
+st.caption("**数据明细表**（单位：万人次）")
+
+growth_df = chart_data[["机场", "2025", "2024", "增量", "增长率(%)"]].copy()
+growth_df["增长率"] = growth_df["增长率(%)"].apply(lambda x: f"+{x}%" if x > 0 else f"{x}%")
+st.dataframe(
+    growth_df.style
+        .highlight_max(subset=["增长率(%)"], color="#90EE90")
+        .highlight_min(subset=["增长率(%)"], color="#FFB3B3"),
+    use_container_width=True, hide_index=True,
+    column_config={
+        "2025": st.column_config.NumberColumn("2025年", format="%.0f", width="small"),
+        "2024": st.column_config.NumberColumn("2024年", format="%.0f", width="small"),
+        "增量": st.column_config.NumberColumn("增量(万)", format="+%.0f", width="small"),
+        "增长率(%)": st.column_config.NumberColumn("增长率", format="%.1f%%", width="small"),
+        "增长率": st.column_config.NumberColumn("增长", width="small"),
+    }
+)
 
 # ============================================================
 # 模块四：增长率排名
@@ -495,7 +642,7 @@ with col1:
     st.dataframe(
         growth_ranked[["机场", "增长率(%)"]].style
             .bar(subset=["增长率(%)"], color="#1E90FF"),
-        width='stretch', hide_index=True
+        use_container_width=True, hide_index=True
     )
 with col2:
     st.bar_chart(growth_ranked, x="机场", y="增长率(%)",
@@ -569,7 +716,7 @@ with st.expander("📊 查看月度明细对比数据"):
         f"+{((m2025[i]-m2024[i])/m2024[i]*100):.1f}%" if m2024[i] > 0 else "N/A"
         for i in range(12)
     ]
-    st.dataframe(monthly_detail, width='stretch', hide_index=True)
+    st.dataframe(monthly_detail, use_container_width=True, hide_index=True)
 show_insight("airport_monthly", max_bullets=3)
 
 # ============================================================
@@ -599,7 +746,7 @@ for code in airport_keys:
     airport_filtered = [(t, u) for t, u in airport_news if code[:2] in t or code_en in t]
 
     with st.expander(f"🛫 **{code} ({code_en})** — {annual_25}万/年 (全国第{rank})  |  +{growth}%  |  国际占比 {intl_pct}%"):
-        tabs = st.tabs(["🏗️ 航站楼", "✈️ 主力航司", "🛍️ 免税业务",
+        tabs = st.tabs(["🏗️ 航站楼", "✈️ 航司(境内+境外)", "🛍️ 免税业务",
                         "🌍 境外客流", "📊 双年对比", "📰 最新动态"])
 
         with tabs[0]:
@@ -610,11 +757,30 @@ for code in airport_keys:
                 st.info("暂无航站楼信息")
 
         with tabs[1]:
+            # --- 境内航司（国内基地航司）---
             if airlines:
+                st.markdown("**🇨🇳 境内主力航司**")
                 for airline in airlines:
                     st.markdown(f"- ✈️ {airline}")
             else:
-                st.info("暂无主力航司信息")
+                st.info("暂无境内主力航司信息")
+
+            # --- 境外航司（国际/地区航司，免税业务核心客源）---
+            intl_airlines = intl_info.get("intl_airlines", [])
+            if intl_airlines:
+                st.markdown("---")
+                st.markdown(f"**🌏 境外/地区航司（{len(intl_airlines)}家）** — *免税核心客源承运方*")
+                # 分 2 列展示，避免列表过长
+                col_a, col_b = st.columns(2)
+                half = (len(intl_airlines) + 1) // 2
+                with col_a:
+                    for al in intl_airlines[:half]:
+                        st.markdown(f"- 🌐 {al}")
+                with col_b:
+                    for al in intl_airlines[half:]:
+                        st.markdown(f"- 🌐 {al}")
+            else:
+                st.info("暂无境外航司信息")
 
         with tabs[2]:
             st.markdown(f"- **运营商**: {duty_free.get('operator', '暂无')}")
@@ -698,7 +864,7 @@ st.dataframe(
     compare_df.style
         .highlight_max(subset=["2025(万)", "增长(%)"], color="#90EE90")
         .highlight_min(subset=["增长(%)"], color="#FFB3B3"),
-    width='stretch', hide_index=True,
+    use_container_width=True, hide_index=True,
     column_config={
         "2025(万)": st.column_config.NumberColumn(format="%.0f"),
         "2024(万)": st.column_config.NumberColumn(format="%.0f"),
@@ -765,7 +931,7 @@ if summary:
             summary_rows.append({"类别": icon, "数据": val, "说明": ctx})
     if summary_rows:
         summary_df = pd.DataFrame(summary_rows)
-        st.dataframe(summary_df, width='stretch', hide_index=True)
+        st.dataframe(summary_df, use_container_width=True, hide_index=True)
     else:
         st.info("暂无摘要数据")
 else:

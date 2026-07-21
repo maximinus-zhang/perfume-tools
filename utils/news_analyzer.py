@@ -321,9 +321,31 @@ def _benchmark_quantity(qty: dict, category: Optional[str], metrics: Optional[di
                 parts.append("注意：该数字超过 H1 累计免税客流，需确认是否为全年/多月口径")
 
     elif category == "airport_pax" and ("万人次" in unit or "万人" in unit):
-        # 12大机场 2025 平均年吞吐约 5000-7000 万；月均约 450-600 万
-        parts.append(f"新闻提及 **{val}{unit}**；12大机场 2025 年均吞吐多在 5000–7000 万级别，"
-                     f"单月约 450–600 万，可作机场月度/旺季客流参考")
+        # 尝试从标题匹配具体机场，并与该机场年吞吐做对比
+        airport_match = None
+        try:
+            from utils.hainan_scraper import AIRPORT_DB
+            for name, info in AIRPORT_DB.items():
+                if name in title or info.get("code_en", "") in title:
+                    airport_match = (name, info)
+                    break
+        except Exception:
+            airport_match = None
+
+        if airport_match:
+            name, info = airport_match
+            annual = info.get("annual_2025") or info.get("annual_2024", 0)
+            monthly_avg = annual / 12 if annual else None
+            if annual and val <= annual * 1.5:
+                parts.append(f"约相当于 **{name}** 年吞吐量 **{annual}万** 的 **{val/annual*100:.1f}%**")
+            if monthly_avg and val <= monthly_avg * 6:
+                parts.append(f"约相当于该机场月均客流 **{monthly_avg:.0f}万** 的 **{val/monthly_avg:.1f}倍**")
+            if name in ("海口美兰", "三亚凤凰"):
+                parts.append(f"该机场为海南离岛免税直接口岸，客流变化与免税潜在客流池高度相关")
+        else:
+            # 12大机场 2025 平均年吞吐约 5000-7000 万；月均约 450-600 万
+            parts.append(f"新闻提及 **{val}{unit}**；12大机场 2025 年均吞吐多在 5000–7000 万级别，"
+                         f"单月约 450–600 万，可作机场月度/旺季客流参考")
 
     elif category == "pieces" and ("万件" in unit or "亿件" in unit):
         ratio_h1 = val / m["h1_pieces"] * 100
