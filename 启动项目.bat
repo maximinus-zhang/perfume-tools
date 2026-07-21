@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title Perfume Supply Chain - Push & Start
+title "Perfume Supply Chain - Push and Start"
 color 0A
 
 cd /d "C:\Users\Maximinuszhang\Desktop\PYTHON\perfume-tools-main"
