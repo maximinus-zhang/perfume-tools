@@ -1,4 +1,13 @@
 @echo off
+:: ====== 单实例锁：防止双击时 Windows 重复打开两个窗口 ======
+set LOCK_FILE=%TEMP%\perfume_tools_push_lock.tmp
+if exist "%LOCK_FILE%" (
+    echo [INFO] 已经在运行中，本实例自动退出。
+    exit /B 0
+)
+echo locked > "%LOCK_FILE%"
+:: ================================================================
+
 chcp 65001 >nul
 title Perfume Supply Chain - Push & Start
 color 0A
@@ -33,5 +42,8 @@ if not exist "venv\Scripts\python.exe" python -m venv venv
 venv\Scripts\python.exe -m pip install --upgrade -r requirements.txt
 echo 应用启动后请在浏览器打开: http://localhost:8501
 venv\Scripts\python.exe -m streamlit run app.py
+
+:: 清理锁文件
+del "%LOCK_FILE%" 2>nul
 
 pause
