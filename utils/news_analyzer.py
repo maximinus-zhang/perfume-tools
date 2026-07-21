@@ -181,11 +181,192 @@ def _extract_signal(title: str, signals: dict) -> Optional[Tuple[str, str]]:
     return None
 
 
+# ============================================================
+# 量化分析增强：提取新闻数字并与官方 H1 数据交叉验证
+# ============================================================
+
+_HAINAN_METRICS_TEMPLATE = {
+    "h1_amount": 199.2,    # 亿元
+    "h1_pax": 279.3,       # 万人次
+    "h1_pieces": 1596.6,   # 万件
+    "h1_months": 6,
+    "amt_yoy": 18.8,
+    "pax_yoy": 12.6,
+    "pc_yoy": 7.3,
+}
+
+
+def _extract_quantities(title: str) -> List[dict]:
+    """
+    从标题中提取带单位的数值。
+    例：'海南离岛免税销售额 199.2亿元，客流 458万人次' ->
+        [{'value':199.2,'unit':'亿元','raw':'199.2亿元'},
+         {'value':458,'unit':'万人次','raw':'458万人次'}]
+    """
+    pattern = r"(\d+\.?\d*)\s*((?:[万亿]?元)|(?:[万亿]?人次?)|(?:[万亿]?件)|(?:%))"
+    results = []
+    for m in re.finditer(pattern, title):
+        results.append({
+            "value": float(m.group(1)),
+            "unit": m.group(2),
+            "raw": m.group(0).strip(),
+        })
+    return results
+
+
+def _classify_news(title: str) -> Optional[str]:
+    """根据标题关键词判断数字口径。"""
+    t = title.lower()
+
+    # 免税销售额/营收
+    if any(k in t for k in ["免税", "离岛", "cdf", "中免"]) and \
+       any(k in t for k in ["销售", "金额", "购物金额", "销售额", "营收", "收入"]):
+        return "duty_free_sales"
+
+    # 免税客流
+    if any(k in t for k in ["免税", "离岛", "cdf", "中免"]) and \
+       any(k in t for k in ["购物人数", "购物人次", "客流", "人次"]):
+        return "duty_free_pax"
+
+    # 旅游/全省客流
+    if any(k in t for k in ["游客", "旅游", "接待", "全省客流", "进出岛", "暑期", "暑运"]) and \
+       any(k in t for k in ["人次", "万人", "客流"]):
+        return "tourism_pax"
+
+    # 机场客流
+    if any(k in t for k in ["机场", "旅客吞吐量", "航班", "航线", "吞吐"]) and \
+       any(k in t for k in ["万人次", "万人", "旅客"]):
+        return "airport_pax"
+
+    # 件数
+    if any(k in t for k in ["件数", "件单价", "购物件数", "件"]):
+        return "pieces"
+
+    # 客单价
+    if any(k in t for k in ["客单价", "人均消费", "人均"]):
+        return "asp"
+
+    # 增速
+    if any(k in t for k in ["同比", "增长", "增速", "yoy"]):
+        return "growth"
+
+    return None
+
+
+def _category_label(category: str, signals: dict, title: str) -> str:
+    """给量化口径选一个展示标签；若标题命中信号词，优先用信号标签。"""
+    sig = _extract_signal(title, signals)
+    if sig:
+        return sig[0]
+    mapping = {
+        "duty_free_sales": "💰 销售口径",
+        "duty_free_pax": "🛒 免税客流",
+        "tourism_pax": "🌐 全省客流",
+        "airport_pax": "✈️ 机场客流",
+        "pieces": "📦 件数口径",
+        "asp": "🛒 客单信号",
+        "growth": "📈 增速信号",
+    }
+    return mapping.get(category, "📰 相关动态")
+
+
+def _compute_derived_metrics(metrics: Optional[dict]) -> dict:
+    m = metrics or _HAINAN_METRICS_TEMPLATE
+    return {
+        "monthly_avg_amount": m["h1_amount"] / m["h1_months"],
+        "monthly_avg_pax": m["h1_pax"] / m["h1_months"],
+        "monthly_avg_pieces": m["h1_pieces"] / m["h1_months"],
+        "asp_per_pax": (m["h1_amount"] * 10000) / m["h1_pax"] if m.get("h1_pax") else None,
+        "asp_per_piece": (m["h1_amount"] * 10000) / m["h1_pieces"] if m.get("h1_pieces") else None,
+        "pieces_per_pax": m["h1_pieces"] / m["h1_pax"] if m.get("h1_pax") else None,
+    }
+
+
+def _benchmark_quantity(qty: dict, category: Optional[str], metrics: Optional[dict]) -> Optional[str]:
+    """
+    把新闻里的数字与官方 H1 数据对比，返回带计算的人话解释。
+    若无法形成有意义对比，返回 None。
+    """
+    m = metrics or _HAINAN_METRICS_TEMPLATE
+    d = _compute_derived_metrics(m)
+    val = qty["value"]
+    unit = qty["unit"]
+
+    # 单位优先：带 % 的数字一律按增速口径处理
+    if unit == "%":
+        category = "growth"
+
+    parts = []
+
+    if category == "duty_free_sales" and "亿" in unit:
+        ratio_h1 = val / m["h1_amount"] * 100
+        ratio_month = val / d["monthly_avg_amount"]
+        parts.append(f"约为 H1 累计 **{m['h1_amount']}亿** 的 **{ratio_h1:.1f}%**")
+        parts.append(f"相当于 H1 月均 **{d['monthly_avg_amount']:.1f}亿** 的 **{ratio_month:.1f}倍**")
+        if val > m["h1_amount"]:
+            parts.append("注意：该数字超过 H1 累计口径，可能是全年预测或更宽口径")
+
+    elif category in ("duty_free_pax", "tourism_pax") and ("万人次" in unit or "万人" in unit):
+        ratio_h1 = val / m["h1_pax"]
+        ratio_month = val / d["monthly_avg_pax"]
+        if category == "tourism_pax":
+            parts.append(f"约为 H1 免税客流 **{m['h1_pax']}万人次** 的 **{ratio_h1:.1f}倍**")
+            conv = (m["h1_pax"] / val * 100) if val else None
+            if conv:
+                parts.append(f"若视为全省旅游客流，对应免税购物转化率约 **{conv:.1f}%**")
+        else:
+            parts.append(f"约为 H1 免税客流 **{m['h1_pax']}万人次** 的 **{ratio_h1*100:.1f}%**")
+            parts.append(f"相当于 H1 月均 **{d['monthly_avg_pax']:.1f}万人次** 的 **{ratio_month:.1f}倍**")
+            if val > m["h1_pax"]:
+                parts.append("注意：该数字超过 H1 累计免税客流，需确认是否为全年/多月口径")
+
+    elif category == "airport_pax" and ("万人次" in unit or "万人" in unit):
+        # 12大机场 2025 平均年吞吐约 5000-7000 万；月均约 450-600 万
+        parts.append(f"新闻提及 **{val}{unit}**；12大机场 2025 年均吞吐多在 5000–7000 万级别，"
+                     f"单月约 450–600 万，可作机场月度/旺季客流参考")
+
+    elif category == "pieces" and ("万件" in unit or "亿件" in unit):
+        ratio_h1 = val / m["h1_pieces"] * 100
+        ratio_month = val / d["monthly_avg_pieces"]
+        parts.append(f"约为 H1 累计 **{m['h1_pieces']}万件** 的 **{ratio_h1:.1f}%**")
+        parts.append(f"相当于 H1 月均 **{d['monthly_avg_pieces']:.1f}万件** 的 **{ratio_month:.1f}倍**")
+
+    elif category == "asp" and "元" in unit:
+        asp = d["asp_per_pax"]
+        if asp:
+            ratio = val / asp
+            parts.append(f"H1 免税客单价约 **{asp:.0f}元/人**；新闻数值相当于其 **{ratio:.1f}倍**")
+            if ratio < 0.7:
+                parts.append("显著低于 H1 均值，可能指向件单价较低或促销折扣加深")
+            elif ratio > 1.3:
+                parts.append("显著高于 H1 均值，可能指向高客单品类或奢侈品类占比提升")
+
+    elif category == "growth" and unit == "%":
+        amt, pax, pc = m["amt_yoy"], m["pax_yoy"], m["pc_yoy"]
+        if abs(val - amt) < 2:
+            parts.append(f"与官方 H1 销售额同比 **+{amt}%** 基本对齐")
+        elif abs(val - pax) < 2:
+            parts.append(f"与官方 H1 客流同比 **+{pax}%** 基本对齐")
+        elif abs(val - pc) < 2:
+            parts.append(f"与官方 H1 件数同比 **+{pc}%** 基本对齐")
+        else:
+            parts.append(f"官方 H1：金额同比 **+{amt}%**、客流同比 **+{pax}%**、件数同比 **+{pc}%**")
+            if val > amt:
+                parts.append(f"该增速 **高于** 官方金额同比，可能指向单月/单季或更宽口径")
+            else:
+                parts.append(f"该增速 **低于** 官方金额同比，可能指向增速放缓信号")
+    else:
+        return None
+
+    return "；".join(parts)
+
+
 def analyze_news_for_context(
     news_items: List[Tuple[str, str]],
     context: str,
     max_bullets: int = 3,
     include_urls: bool = True,
+    metrics: Optional[dict] = None,
 ) -> List[dict]:
     """
     为指定模块上下文生成新闻分析备注。
@@ -195,6 +376,9 @@ def analyze_news_for_context(
         context: NEWS_CONTEXTS 中的上下文名
         max_bullets: 最多返回几条
         include_urls: 返回结果中是否保留原始 url
+        metrics: 官方/当前模块指标，传入后新闻里的数字会与指标交叉验证
+                 例如 {"h1_amount":199.2,"h1_pax":279.3,"h1_pieces":1596.6,
+                       "amt_yoy":18.8,"pax_yoy":12.6,"pc_yoy":7.3}
 
     返回：
         List[dict]，每个 dict 包含：
@@ -219,6 +403,32 @@ def analyze_news_for_context(
         if not _matches_filter(title, filter_kw):
             continue
 
+        # --- 量化分析分支：有 metrics 时优先拿数字做交叉验证 ---
+        if metrics:
+            category = _classify_news(title)
+            quantities = _extract_quantities(title)
+            quantified = False
+            for qty in quantities:
+                bench = _benchmark_quantity(qty, category, metrics)
+                if bench:
+                    label = _category_label(category, signals, title)
+                    if label in seen_labels:
+                        continue
+                    seen_labels.add(label)
+                    text = f"**{label}**：新闻提及 **{qty['raw']}**；{bench}。"
+                    rec = {"label": label, "text": text, "title": title}
+                    if include_urls:
+                        rec["url"] = url
+                    bullets.append(rec)
+                    quantified = True
+                    break
+
+            if quantified:
+                if len(bullets) >= max_bullets:
+                    break
+                continue
+
+        # --- 信号/语义分支：无量化对比时按关键词生成摘要 ---
         sig = _extract_signal(title, signals)
         if not sig:
             # 没有命中信号词，但命中了过滤关键词，也保留一条泛化备注
@@ -274,6 +484,7 @@ def st_insight_box(
     context: str,
     max_bullets: int = 3,
     expanded: bool = False,
+    metrics: Optional[dict] = None,
 ):
     """
     在 Streamlit 页面直接渲染一个 insight expander。
@@ -281,7 +492,7 @@ def st_insight_box(
     """
     import streamlit as st
 
-    bullets = analyze_news_for_context(news_items, context, max_bullets)
+    bullets = analyze_news_for_context(news_items, context, max_bullets, metrics=metrics)
     md = render_insight_markdown(
         bullets,
         header=f"🤖 {NEWS_CONTEXTS.get(context, {}).get('label', context)} · 新闻自动备注",

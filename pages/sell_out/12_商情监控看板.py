@@ -71,11 +71,13 @@ except Exception as _ne:
 
 
 def show_insight(context, max_bullets=3):
-    """在模块下方渲染新闻自动分析备注。"""
+    """在模块下方渲染新闻自动分析备注（基于官方 H1 指标做量化交叉验证）。"""
     try:
         if not _all_news:
             return
-        bullets = analyze_news_for_context(_all_news, context, max_bullets=max_bullets)
+        bullets = analyze_news_for_context(
+            _all_news, context, max_bullets=max_bullets, metrics=HAINAN_METRICS
+        )
         st.markdown(render_insight_markdown(bullets))
     except Exception as e:
         st.caption(f"🤖 新闻备注生成失败：{e}")
@@ -96,6 +98,15 @@ def est_badge():
 # 顶部：全省官方大盘（这些是实测，非估算）
 # ============================================================
 ytd = HA_DF_2026["ytd"]
+HAINAN_METRICS = {
+    "h1_amount": float(ytd["amount_2026"]),
+    "h1_pax": float(ytd["pax_2026"]),
+    "h1_pieces": float(ytd["pieces_2026"]),
+    "h1_months": 6,
+    "amt_yoy": float(ytd["amt_yoy"]),
+    "pax_yoy": float(ytd["pax_yoy"]),
+    "pc_yoy": float(ytd["pc_yoy"]),
+}
 st.subheader("📌 全省大盘（官方口径 · 海口海关）")
 c1, c2, c3 = st.columns(3)
 c1.metric("H1 销售额", f"{ytd['amount_2026']} 亿", f"{ytd['amt_yoy']}% YoY",
