@@ -280,7 +280,7 @@ if not df_summary.empty:
     )
     fig.update_layout(hovermode='x unified', height=450)
     fig.update_traces(line=dict(width=3))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 else:
     st.info("当前筛选范围无汇总数据，使用SKU明细计算...")
     if not df_sku.empty:
@@ -298,7 +298,7 @@ else:
                 markers=True, title='SKU明细层面：各负责人月度满足率趋势'
             )
             fig.update_layout(height=450)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
 # --- 5.3 订单量 vs 满足率双轴图 ---
 st.subheader("📊 订单量 vs 满足率（月度汇总）")
@@ -337,7 +337,7 @@ if not df_summary.empty or not df_sku.empty:
     fig2.update_yaxes(title_text="订单数", secondary_y=False)
     fig2.update_yaxes(title_text="满足率 (%)", secondary_y=True, range=[0, 105])
     
-    st.plotly_chart(fig2, use_container_width=True)
+    st.plotly_chart(fig2, width='stretch')
 
 # --- 5.4 SKU满足率分布 ---
 st.subheader("🎯 SKU满足率分布")
@@ -370,7 +370,7 @@ if not df_sku.empty:
         color='满足率区间', color_discrete_sequence=colors
     )
     fig3.update_layout(height=400, showlegend=False)
-    st.plotly_chart(fig3, use_container_width=True)
+    st.plotly_chart(fig3, width='stretch')
 
 # --- 5.5 品牌满足率排行 ---
 st.subheader("🏆 品牌满足率排行")
@@ -396,7 +396,7 @@ if not df_sku.empty:
     )
     fig4.update_traces(texttemplate='%{text:.1f}%', textposition='outside')
     fig4.update_layout(height=600)
-    st.plotly_chart(fig4, use_container_width=True)
+    st.plotly_chart(fig4, width='stretch')
 
 # --- 5.6 负责人×月份 矩阵 ---
 st.subheader("🗺️ 满足率矩阵（负责人 × 月份）")
@@ -423,7 +423,7 @@ if not source_matrix.empty:
         labels=dict(x='月份', y='负责人', color='满足率 %')
     )
     fig5.update_layout(height=350)
-    st.plotly_chart(fig5, use_container_width=True)
+    st.plotly_chart(fig5, width='stretch')
 
 # ============================================
 # 6. 月度分析报告
@@ -536,4 +536,4 @@ with col2:
 
 # 原始数据查看
 with st.expander("🔍 查看原始数据"):
-    st.dataframe(df_filtered, use_container_width=True)
+    st.dataframe(df_filtered, width='stretch')

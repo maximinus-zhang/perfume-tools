@@ -41,6 +41,6 @@ store_data = pd.DataFrame({
     "销售额(万)": [5200, 3800, 2100, 1500, 1200, 850],
     "环比(%)": [8.5, 6.2, 4.1, -2.3, 5.0, 3.5],
 })
-st.dataframe(store_data, use_container_width=True, hide_index=True)
+st.dataframe(store_data, width='stretch', hide_index=True)
 
 st.caption(f"📊 {datetime.now().strftime('%Y-%m-%d %H:%M')}")

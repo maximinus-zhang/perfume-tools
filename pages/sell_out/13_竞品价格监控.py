@@ -97,7 +97,7 @@ with st.sidebar:
     st.subheader("⚙️ 抓取控制")
     st.markdown("仅对**纯 HTTP 零售商**（中免）即时抓取，无需浏览器。"
                 "海旅等需浏览器的零售商在此环境暂不触发。")
-    if st.button("🔄 立即抓取一次（中免）", use_container_width=True, type="primary"):
+    if st.button("🔄 立即抓取一次（中免）", width='stretch', type="primary"):
         def _run():
             try:
                 from utils.price_monitor.config import RETAILERS_MONITOR as _RM
@@ -239,7 +239,7 @@ with tab_board:
             return out
 
         styled = df.style.apply(_style, axis=1)
-        st.dataframe(styled, use_container_width=True, hide_index=True)
+        st.dataframe(styled, width='stretch', hide_index=True)
         st.caption("说明：红字=较上轮降价≥5%；绿字=免税省≥30%；灰色=无价（未上架/登录墙/异常）。"
                    "折扣率= (有税参考价−免税价)/有税参考价。价格均为实测公开标价。")
 
@@ -293,7 +293,7 @@ with tab_shelf:
     brands = BRAND_SHELF.get(shelf_cat, [])
     shelf_brand = st.selectbox("🏢 品牌", options=brands, index=0)
 
-    if st.button("🔍 查询货架", type="primary", use_container_width=False):
+    if st.button("🔍 查询货架", type="primary", width='content'):
         with st.spinner(f"实时查询中免「{shelf_brand}」货架…"):
             try:
                 results = search_shelf(shelf_brand, category=shelf_cat)
@@ -323,7 +323,7 @@ with tab_shelf:
                 "链接": o.get("url") or "",
             })
         sdf = pd.DataFrame(rows)
-        st.dataframe(sdf, use_container_width=True, hide_index=True)
+        st.dataframe(sdf, width='stretch', hide_index=True)
         st.caption("说明：折扣率= (有税参考价−免税价)/有税参考价；促销标签来自中免「秒杀价/促销」等。")
     else:
         st.info("ℹ️ 点上方「查询货架」查看该品牌在中免的在售商品与折扣。", icon="ℹ️")

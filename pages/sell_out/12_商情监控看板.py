@@ -162,7 +162,7 @@ for r in retailers_est:
         "口径": ESTIMATE_BADGE,
     })
 r_df = pd.DataFrame(r_rows)
-st.dataframe(r_df, use_container_width=True, hide_index=True)
+st.dataframe(r_df, width='stretch', hide_index=True)
 st.caption("说明：占比为代理假设（RETAILER_SHARE），非逐店实测；数值随上方锚点联动。")
 show_insight("retailer_overview", max_bullets=3)
 
@@ -186,7 +186,7 @@ for s in stores:
     })
 s_df = pd.DataFrame(s_rows)
 # 门店级数值加角标（用 markdown 渲染，口径列已标注）
-st.dataframe(s_df, use_container_width=True, hide_index=True)
+st.dataframe(s_df, width='stretch', hide_index=True)
 st.markdown(
     f"以上 {len(s_df)} 条门店级记录，每一条的「口径」列均为 {est_badge()}，"
     f"「分摊方法」列可追溯计算来源；**请勿当作各店实测值**。",

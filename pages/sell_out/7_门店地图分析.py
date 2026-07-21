@@ -453,8 +453,7 @@ map_result = st_folium(
     m,
     width="100%",
     height=600,
-    returned_objects=["last_clicked", "last_object_clicked"],
-    use_container_width=True,
+    returned_objects=["last_clicked", "last_object_clicked"]
 )
 
 st.caption("💡 操作提示：滚轮缩放 | 拖拽平移 | 点击省份查看详情 | 点击门店图标查看门店信息")
@@ -486,7 +485,7 @@ if selected_brands:
         })
 
     df_detail = pd.DataFrame(rows)
-    st.dataframe(df_detail, use_container_width=True, hide_index=True)
+    st.dataframe(df_detail, width='stretch', hide_index=True)
 
 
 # ============================================================
@@ -509,7 +508,7 @@ with t1:
     )
     fig_pie.update_traces(textposition="inside", textinfo="percent+label",
                           textfont_size=13)
-    st.plotly_chart(fig_pie, use_container_width=True)
+    st.plotly_chart(fig_pie, width='stretch')
 
 with t2:
     oc = df_stores["operator"].value_counts().reset_index()
@@ -523,7 +522,7 @@ with t2:
         template="plotly_white",
     )
     fig_op.update_layout(xaxis_tickangle=-35, xaxis_title="", yaxis_title="")
-    st.plotly_chart(fig_op, use_container_width=True)
+    st.plotly_chart(fig_op, width='stretch')
 
 with t3:
     pc = df_stores["province"].value_counts().reset_index()
@@ -539,7 +538,7 @@ with t3:
         template="plotly_white",
     )
     fig_pc.update_layout(height=max(480, len(pc) * 28), yaxis_title="", xaxis_title="")
-    st.plotly_chart(fig_pc, use_container_width=True)
+    st.plotly_chart(fig_pc, width='stretch')
 
 with t4:
     bd_rows = []
@@ -556,7 +555,7 @@ with t4:
         template="plotly_white",
     )
     fig_bd.update_layout(height=max(450, len(df_bd) * 27), yaxis_title="", xaxis_title="")
-    st.plotly_chart(fig_bd, use_container_width=True)
+    st.plotly_chart(fig_bd, width='stretch')
 
 
 # ============================================================
@@ -600,7 +599,7 @@ if len(selected_brands) >= 2:
         legend_orientation="h",
         legend_y=1.08,
     )
-    st.plotly_chart(fig_radar, use_container_width=True)
+    st.plotly_chart(fig_radar, width='stretch')
 else:
     st.info("ℹ️ 请在左侧选择 **至少 2 个品牌** 进行对比分析")
 
@@ -612,7 +611,7 @@ st.markdown("---")
 with st.expander("📄 查看门店完整清单"):
     show_df = df_stores[["pos", "city", "province", "operator", "type", "status"]].copy()
     show_df.columns = ["门店名称", "城市", "区域", "运营商", "类型", "状态"]
-    st.dataframe(show_df, use_container_width=True, hide_index=True)
+    st.dataframe(show_df, width='stretch', hide_index=True)
 
     csv_buf = df_stores.to_csv(index=False).encode("utf-8-sig")  # BOM for Excel
     st.download_button(

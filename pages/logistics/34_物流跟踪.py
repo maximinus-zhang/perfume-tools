@@ -169,7 +169,7 @@ table = table[["发货日", "门店", "发票号", "货号", "中文名", "数�
 table["发货日"] = table["发货日"].dt.strftime("%Y-%m-%d")
 st.dataframe(
     table,
-    use_container_width=True,
+    width='stretch',
     hide_index=True,
     height=min(420, max(280, len(table) * 32 + 40)),
     column_config={

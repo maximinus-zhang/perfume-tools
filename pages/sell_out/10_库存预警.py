@@ -112,7 +112,7 @@ with tab1:
 
         st.dataframe(
             alerts.style.apply(highlight_alert, axis=1),
-            use_container_width=True,
+            width='stretch',
             column_config={
                 '建议补货': st.column_config.NumberColumn(format="%d 件"),
             }
@@ -137,7 +137,7 @@ with tab1:
             line_dash="dash", line_color="red",
             annotation_text="平均安全库存线"
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
     else:
         st.success("✅ 暂无库存预警！")
 
@@ -156,7 +156,7 @@ with tab2:
             barmode='stack'
         )
         fig.update_xaxes(tickangle=45)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
     with col2:
         # 库存天数分布
@@ -170,7 +170,7 @@ with tab2:
         )
         fig.add_vline(x=30, line_dash="dash", line_color="red",
                       annotation_text="30天警戒线")
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
 with tab3:
     st.subheader("📋 自动补货建议")
@@ -197,12 +197,12 @@ with tab3:
                 text_auto=True
             )
             fig.update_xaxes(tickangle=45)
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width='stretch')
 
         with col2:
             st.dataframe(
                 need_reorder_df[['门店', '产品', '当前库存', '安全库存', '日均销量', '预计天数', '建议补货']],
-                use_container_width=True,
+                width='stretch',
                 column_config={
                     '建议补货': st.column_config.NumberColumn(format="%d 件"),
                 }

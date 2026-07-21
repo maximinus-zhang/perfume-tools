@@ -138,18 +138,18 @@ if has_data:
             carrier_stats['平均时效(天)'] = '-'
             carrier_stats['准时率(%)'] = '-'
 
-        st.dataframe(carrier_stats, use_container_width=True, hide_index=True)
+        st.dataframe(carrier_stats, width='stretch', hide_index=True)
     else:
         st.dataframe(pd.DataFrame({"物流商": ["顺丰", "京东", "中通", "德邦"],
                                     "平均时效(天)": [2.1, 2.5, 3.8, 4.2],
                                     "准时率(%)": [98.5, 96.2, 91.0, 88.5]}),
-                     use_container_width=True, hide_index=True)
+                     width='stretch', hide_index=True)
 else:
     carrier = pd.DataFrame({
         "物流商": ["顺丰", "京东", "中通", "德邦"],
         "平均时效(天)": [2.1, 2.5, 3.8, 4.2],
         "准时率(%)": [98.5, 96.2, 91.0, 88.5],
     })
-    st.dataframe(carrier, use_container_width=True, hide_index=True)
+    st.dataframe(carrier, width='stretch', hide_index=True)
 
 st.caption(f"📊 {datetime.now().strftime('%Y-%m-%d %H:%M')}")

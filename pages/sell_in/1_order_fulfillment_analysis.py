@@ -409,7 +409,7 @@ st.divider()
 # 执行按钮
 col_left, col_mid, col_right = st.columns([1, 2, 1])
 with col_mid:
-    execute_btn = st.button("🚀 执行满足率分析", type="primary", use_container_width=True)
+    execute_btn = st.button("🚀 执行满足率分析", type="primary", width='stretch')
 
 # 结果区域
 status_box = st.empty()
@@ -543,7 +543,7 @@ if execute_btn:
                             data=zip_buffer,
                             file_name=f"订单满足率分析_{time.strftime('%Y%m%d_%H%M%S')}.zip",
                             mime="application/zip",
-                            use_container_width=True
+                            width='stretch'
                         )
                     else:
                         status_box.error("❌ 所有文件处理失败，无结果可下载")

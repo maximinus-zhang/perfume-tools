@@ -189,7 +189,7 @@ def main():
             yaxis2=dict(title="购物人数（万）", overlaying="y", side="right"),
             hovermode="x unified", legend=dict(orientation="h"),
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
         st.subheader("逐年明细（含同比）")
         show = pdf.copy()
@@ -199,7 +199,7 @@ def main():
         show["销售额同比"] = show["sales_yoy"].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) else "—")
         show["人数同比"] = show["guests_yoy"].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) else "—")
         st.dataframe(show[["year", "销售额(亿)", "销售额同比", "购物人数(万)", "人数同比"]],
-                     use_container_width=True, hide_index=True)
+                     width='stretch', hide_index=True)
 
         st.info(
             "📌 说明：2019–2024 为海口海关监管的“离岛免税购物金额”；"
@@ -219,7 +219,7 @@ def main():
             title="各门店年度营业收入对比",
         )
         fig.update_xaxes(tickangle=20)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch')
 
         st.subheader("逐年明细与同比")
         sd = sdf.copy()
@@ -227,7 +227,7 @@ def main():
         sd["yoy"] = sd["yoy"].apply(lambda x: f"{x:+.1f}%" if pd.notna(x) else "首年/无对比")
         st.dataframe(
             sd[["store", "year", "revenue", "yoy"]].rename(columns={"revenue": "营业收入(亿)"}),
-            use_container_width=True, hide_index=True,
+            width='stretch', hide_index=True,
         )
 
         st.warning(

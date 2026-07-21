@@ -91,7 +91,7 @@ if not st.session_state.get(SESSION_AUTH, False):
     )
     pw = st.text_input("访问密码", type="password", key="newness_pw",
                        placeholder="请输入密码", help="密码由负责人提供，不显示在页面上")
-    if st.button("🔓 解锁查看", type="primary", use_container_width=True):
+    if st.button("🔓 解锁查看", type="primary", width='stretch'):
         try_unlock()
     if st.session_state.get(SESSION_ERR):
         st.error(st.session_state[SESSION_ERR])
@@ -148,7 +148,7 @@ if quarters:
         xaxis_title=None, yaxis_title="新品数量（款）",
         font=dict(size=13),
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
 
 # ======================================================================
@@ -236,7 +236,7 @@ bp = data.get("brand_pages", [])
 if bp:
     bpdf = pd.DataFrame(bp)
     bpdf.columns = ["品牌 Brand", "PPT 页码范围"]
-    st.dataframe(bpdf, use_container_width=True, hide_index=True)
+    st.dataframe(bpdf, width='stretch', hide_index=True)
 
 st.divider()
 st.caption("页面由「派派 · 高级开发工程师」构建：轻量加密(PBKDF2+XOR) + Streamlit 原生渲染，"

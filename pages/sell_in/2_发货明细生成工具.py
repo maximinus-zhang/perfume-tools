@@ -133,7 +133,7 @@ def parse_bpcode_list(file_obj):
 
 
 # ========== 主处理逻辑 ==========
-if st.button("🚀 生成发货明细", type="primary", use_container_width=True):
+if st.button("🚀 生成发货明细", type="primary", width='stretch'):
     if sell_in_file is None or bpcode_file is None:
         st.error("请先上传 SELL IN 报表和 SIS BPCode List 文件！")
         st.stop()
@@ -151,7 +151,7 @@ if st.button("🚀 生成发货明细", type="primary", use_container_width=True
     
     # 打印前几条记录用于调试
     st.caption(f"前 3 条记录样例：")
-    st.dataframe(df_sell_in.head(3), use_container_width=True)
+    st.dataframe(df_sell_in.head(3), width='stretch')
     
     # 2. 解析 SIS BPCode List
     progress_bar.progress(30, text="📋 解析 SIS BPCode List...")
@@ -267,7 +267,7 @@ if st.button("🚀 生成发货明细", type="primary", use_container_width=True
             data=hainan_bytes,
             file_name=f"海南_发货明细_{datetime.now().strftime('%Y%m')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
+            width='stretch'
         )
     
     with col_b:
@@ -278,7 +278,7 @@ if st.button("🚀 生成发货明细", type="primary", use_container_width=True
             data=non_hainan_bytes,
             file_name=f"非海南_发货明细_{datetime.now().strftime('%Y%m')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True
+            width='stretch'
         )
     
     # 10. 数据预览
@@ -290,16 +290,16 @@ if st.button("🚀 生成发货明细", type="primary", use_container_width=True
     with tab1:
         # 交叉统计
         summary = df_filtered.groupby(['District', 'Type']).size().unstack(fill_value=0)
-        st.dataframe(summary, use_container_width=True)
+        st.dataframe(summary, width='stretch')
     
     with tab2:
         preview_cols = ['District', 'SIS_BPCode', 'CustomerName', 'Brand', 'SKU', 'ItemName', 'Qty']
         df_product_preview = df_filtered[df_filtered['Type'] == '产品'][preview_cols].head(20)
-        st.dataframe(df_product_preview, use_container_width=True)
+        st.dataframe(df_product_preview, width='stretch')
     
     with tab3:
         df_foc_preview = df_filtered[df_filtered['Type'] == 'FOC'][preview_cols].head(20)
-        st.dataframe(df_foc_preview, use_container_width=True)
+        st.dataframe(df_foc_preview, width='stretch')
 
 # ========== 使用说明 ==========
 st.markdown("---")

@@ -44,20 +44,20 @@ st.caption("📊 海南离岛免税：海口海关/新华社/央视/海南特区
 col1, col2 = st.columns([3, 1])
 with col2:
     st.markdown("**🔄 数据刷新**")
-    if st.button("重新解析本地月报", use_container_width=True, key="btn_parse"):
+    if st.button("重新解析本地月报", width='stretch', key="btn_parse"):
         by_ym, recs = build_monthly_from_xlsx()
         st.session_state["customs_by_ym"] = by_ym
         st.session_state["customs_recs"] = recs
         st.session_state["customs_msg"] = f"已重新解析本地 xlsx/：{len(recs)} 个月报"
         st.rerun()
-    if st.button("⬇️ 在线抓取最新(需调试Chrome)", use_container_width=True, key="btn_fetch"):
+    if st.button("⬇️ 在线抓取最新(需调试Chrome)", width='stretch', key="btn_fetch"):
         ok, msg = try_cdp_fetch()
         by_ym, recs = build_monthly_from_xlsx()
         st.session_state["customs_by_ym"] = by_ym
         st.session_state["customs_recs"] = recs
         st.session_state["customs_msg"] = ("✅ " if ok else "⚠️ ") + msg
         st.rerun()
-    if st.button("📰 刷新新闻", use_container_width=True, key="btn_news"):
+    if st.button("📰 刷新新闻", width='stretch', key="btn_news"):
         st.cache_data.clear()
         st.rerun()
 
@@ -284,7 +284,7 @@ qd = pd.DataFrame(q_rows)
 q_show = qd[["q", "amt26", "amt25", "yoy", "pax26", "pax25", "yoy_pax", "amt_src", "note"]].copy()
 q_show.columns = ["季度", "2026金额", "2025金额", "金额同比%", "2026人数", "2025人数", "人数同比%",
                    "数据来源", "说明"]
-st.dataframe(q_show, use_container_width=True, hide_index=True)
+st.dataframe(q_show, width='stretch', hide_index=True)
 show_insight("quarterly", max_bullets=3)
 
 st.markdown("**📅 月度 YTD 进度（亿元 / 万人次）**")
@@ -298,7 +298,7 @@ if "src" in m_show:
     m_show["来源"] = m_show["src"].map(lambda s: badge(s))
 m_show = m_show[["m", "amt26", "amt25", "pax26", "pax25", "来源"]]
 m_show.columns = ["月份", "2026金额", "2025金额", "2026人数", "2025人数", "来源标注"]
-st.dataframe(m_show, use_container_width=True, hide_index=True)
+st.dataframe(m_show, width='stretch', hide_index=True)
 st.caption("💡 1–5月为海关《离岛免税销售情况表》XLSX 真实值（🟢XLSX实时）；6月=H1−Σ1-5 反推；H1/Q1为官方累计口径。点右上『重新解析本地月报』可刷新。")
 show_insight("monthly", max_bullets=3)
 
@@ -307,7 +307,7 @@ st.markdown("**🎪 重要消费节点（2026 · 官方）**")
 ed = pd.DataFrame(HA_DF_2026["events_2026"])
 ed_show = ed[["name", "period", "amt", "pax", "pieces", "yoy", "src"]].copy()
 ed_show.columns = ["节点", "时间", "金额(亿)", "人次(万)", "件数(万)", "金额同比%", "来源"]
-st.dataframe(ed_show, use_container_width=True, hide_index=True)
+st.dataframe(ed_show, width='stretch', hide_index=True)
 
 # 政策动销
 with st.expander("📜 政策动销（2025-11-01 新政 + 封关）"):
@@ -373,7 +373,7 @@ for _, r in amdf.iterrows():
 aspdf = pd.DataFrame(asp_rows)
 if not aspdf.empty:
     st.line_chart(aspdf.set_index("月份")[["客单价(元/人)", "件单价(元/件)"]], height=320)
-    st.dataframe(aspdf, use_container_width=True, hide_index=True)
+    st.dataframe(aspdf, width='stretch', hide_index=True)
     st.caption("⚠️ 2月/6月缺人次数据，未计入。客单价=金额÷人次；件单价=金额÷件数。")
 else:
     st.info("暂无可计算客单价的月份（需同时有人次与件数）")
@@ -403,7 +403,7 @@ st.markdown(f"- **季度拆解**：Q1 金额 +{q1['yoy']}% → Q2 骤降至 +{q2
              f"5月金额同比仅 +0.4% 且件数 −4.9%，增长明显走平。")
 if full_2025:
     st.markdown(f"- **2025 全年基数**：{full_2025:.1f} 亿（取自 2025M12 海关累计）；H1 {h1_2025} + H2 {h2_2025:.1f}。")
-    st.dataframe(projdf, use_container_width=True, hide_index=True)
+    st.dataframe(projdf, width='stretch', hide_index=True)
     st.caption("📌 情景测算基于『H2 2026 相对 H2 2025 给定增速』，仅作计划参考；实际受新政红利衰减、暑期/国庆旺季及补库节奏影响。")
 else:
     st.warning("未解析到 2025M12 累计，无法测算全年情景（请确认 xlsx/ 含 2025M12.xlsx）")
@@ -492,7 +492,7 @@ with st.expander("查看月度诊断明细", expanded=False):
         diag_df.style
             .background_gradient(subset=["同比%"], cmap="RdYlGn", vmin=-10, vmax=50)
             .background_gradient(subset=["环比%"], cmap="RdYlGn", vmin=-40, vmax=40),
-        hide_index=True, use_container_width=True,
+        hide_index=True, width='stretch',
     )
 
 if not low_yoy.empty:
@@ -618,7 +618,7 @@ st.dataframe(
     growth_df.style
         .highlight_max(subset=["增长率(%)"], color="#90EE90")
         .highlight_min(subset=["增长率(%)"], color="#FFB3B3"),
-    use_container_width=True, hide_index=True,
+    width='stretch', hide_index=True,
     column_config={
         "2025": st.column_config.NumberColumn("2025年", format="%.0f", width="small"),
         "2024": st.column_config.NumberColumn("2024年", format="%.0f", width="small"),
@@ -642,7 +642,7 @@ with col1:
     st.dataframe(
         growth_ranked[["机场", "增长率(%)"]].style
             .bar(subset=["增长率(%)"], color="#1E90FF"),
-        use_container_width=True, hide_index=True
+        width='stretch', hide_index=True
     )
 with col2:
     st.bar_chart(growth_ranked, x="机场", y="增长率(%)",
@@ -716,7 +716,7 @@ with st.expander("📊 查看月度明细对比数据"):
         f"+{((m2025[i]-m2024[i])/m2024[i]*100):.1f}%" if m2024[i] > 0 else "N/A"
         for i in range(12)
     ]
-    st.dataframe(monthly_detail, use_container_width=True, hide_index=True)
+    st.dataframe(monthly_detail, width='stretch', hide_index=True)
 show_insight("airport_monthly", max_bullets=3)
 
 # ============================================================
@@ -864,7 +864,7 @@ st.dataframe(
     compare_df.style
         .highlight_max(subset=["2025(万)", "增长(%)"], color="#90EE90")
         .highlight_min(subset=["增长(%)"], color="#FFB3B3"),
-    use_container_width=True, hide_index=True,
+    width='stretch', hide_index=True,
     column_config={
         "2025(万)": st.column_config.NumberColumn(format="%.0f"),
         "2024(万)": st.column_config.NumberColumn(format="%.0f"),
@@ -931,7 +931,7 @@ if summary:
             summary_rows.append({"类别": icon, "数据": val, "说明": ctx})
     if summary_rows:
         summary_df = pd.DataFrame(summary_rows)
-        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        st.dataframe(summary_df, width='stretch', hide_index=True)
     else:
         st.info("暂无摘要数据")
 else:

@@ -98,7 +98,7 @@ if has_data:
             chart_data['金额(万)'] = (chart_data['金额'] / 10000).round(0)
             st.line_chart(chart_data['金额(万)'])
             with st.expander("查看月度数据明细"):
-                st.dataframe(monthly, use_container_width=True, hide_index=True)
+                st.dataframe(monthly, width='stretch', hide_index=True)
         else:
             st.info("无法解析日期列，请检查日期格式")
     else:
@@ -112,4 +112,4 @@ st.caption(f"📊 {datetime.now().strftime('%Y-%m-%d %H:%M')} | {'📤 使用上
 if has_data:
     st.markdown("---")
     with st.expander("📋 查看上传的采购数据明细"):
-        st.dataframe(df_oss, use_container_width=True, hide_index=True)
+        st.dataframe(df_oss, width='stretch', hide_index=True)

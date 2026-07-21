@@ -204,7 +204,7 @@ fig.update_layout(
     hovermode='x unified'
 )
 
-st.plotly_chart(fig, use_container_width=True)
+st.plotly_chart(fig, width='stretch')
 
 # ===== 预测数据表 =====
 st.markdown("---")
@@ -216,7 +216,7 @@ forecast_show['预测出货量'] = forecast_show['预测出货量'].round(0).ast
 forecast_show['下限'] = forecast_show['下限'].round(0).astype(int)
 forecast_show['上限'] = forecast_show['上限'].round(0).astype(int)
 
-st.dataframe(forecast_show, use_container_width=True, hide_index=True)
+st.dataframe(forecast_show, width='stretch', hide_index=True)
 
 # ===== 关键指标 =====
 st.markdown("---")
@@ -248,7 +248,7 @@ for comp, label in zip(components, labels):
         ))
 
 fig2.update_layout(title="预测成分分解", height=400)
-st.plotly_chart(fig2, use_container_width=True)
+st.plotly_chart(fig2, width='stretch')
 
 # ===== 下载预测结果 =====
 csv = forecast_show.to_csv(index=False, encoding='utf-8-sig').encode('utf-8')
