@@ -12,11 +12,11 @@ NAV = {
         {"path": "pages/sell_out/10_库存预警.py",             "title": "库存预警",         "icon": "⚠️"},
         {"path": "pages/sell_out/8_全国免税商情监控.py",      "title": "机场+海南商情监控", "icon": "📡"},
         {"path": "pages/sell_out/12_商情监控看板.py",         "title": "海南免税商情监控看板", "icon": "📈"},
+        {"path": "pages/sell_out/13_竞品价格监控.py",         "title": "竞品价格监控",       "icon": "🛒"},
     ],
     "📦 Sell In 采购端": [
         {"path": "pages/sell_in/22_采购看板.py",              "title": "采购看板",         "icon": "📋"},
         {"path": "pages/sell_in/1_order_fulfillment_analysis.py", "title": "订单满足率分析", "icon": "✅"},
-        {"path": "pages/sell_in/5_报表汇总.py",               "title": "报表汇总",         "icon": "📊"},
         {"path": "pages/sell_in/8_合同审查工具.py",           "title": "合同审查工具",     "icon": "📄"},
         {"path": "pages/sell_in/7_需求预测.py",               "title": "需求预测",         "icon": "📈"},
         {"path": "pages/sell_in/9_需求预测_statsmodels.py",   "title": "需求预测(SARIMA)", "icon": "📊"},

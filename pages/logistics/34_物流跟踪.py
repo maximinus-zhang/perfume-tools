@@ -16,9 +16,7 @@
 """
 import streamlit as st
 import pandas as pd
-import numpy as np
 from datetime import datetime, timedelta
-import plotly.graph_objects as go
 from utils.oss_helper import read_excel_from_oss, read_csv_from_oss, upload_section
 
 st.title("📍 物流模块 · 发货物流跟踪")
@@ -181,43 +179,90 @@ st.dataframe(
     },
 )
 
-# ===== 时间轴可视化（Plotly）=====
+# ===== 物流流水线看板（直接可读，无需悬停）=====
 st.markdown("---")
-st.subheader("🚚 物流时间轴（每笔发货的节点进度）")
-# 笔数过多时只画最近的 60 笔，避免图过长
-view_tl = view.sort_values("Date", ascending=False).head(60)
-fig = go.Figure()
-for _, r in view_tl.iterrows():
-    ds = r["_dates"]
-    lab = f"{r['CustomerName']} · {r['U_OldItemNo']} · {r['Date'].strftime('%m-%d')}"
-    # 背景条：发货 → 分拨到门店
-    fig.add_trace(go.Bar(
-        x=[(ds[-1] - ds[0]).days], base=[ds[0]], y=[lab], orientation="h",
-        marker_color="rgba(210,225,245,0.55)", showlegend=False,
-        hoverinfo="text",
-        hovertext=f"发货: {ds[0]:%Y-%m-%d}<br>分拨到店: {ds[-1]:%Y-%m-%d}",
-    ))
-    # 9 个节点标记（已到达=绿，未到达=灰）
-    colors = ["#2ca02c" if ds[k] <= today else "#cfcfcf" for k in range(len(ds))]
-    fig.add_trace(go.Scatter(
-        x=ds, y=[lab] * len(ds), mode="markers",
-        marker=dict(size=11, color=colors, line=dict(width=1, color="#888")),
-        customdata=np.array([[name] for _, name in MILESTONES]),
-        hovertemplate="%{customdata[0]}: %{x|%Y-%m-%d}<extra></extra>",
-        showlegend=False,
-    ))
-# 今天参考线
-fig.add_vline(x=today, line_dash="dash", line_color="#e4572e",
-              annotation_text="今天", annotation_position="top")
-fig.update_layout(
-    height=max(320, 42 * len(view_tl) + 80),
-    margin=dict(l=10, r=10, t=30, b=10),
-    xaxis_title="日期", yaxis_title="", showlegend=False,
-    xaxis=dict(type="date"),
+st.subheader("🚚 物流流水线看板（每笔发货 × 各节点状态）")
+st.caption("绿色 = 已到达该节点 ｜ 橙色 = 当前进行中 ｜ 灰色 = 尚未到达 ｜ 单元格内为计划/实际日期(MM-DD)")
+
+# 取最近若干笔，避免表格过宽过长；完整笔数见上方明细表
+BOARD_LIMIT = 80
+view_board = view.sort_values("Date", ascending=False).head(BOARD_LIMIT)
+
+# 列头：9 个物流节点
+header_cells = "".join(
+    f'<th class="stage">{i+1}.{name}</th>' for i, (off, name) in enumerate(MILESTONES)
 )
-st.plotly_chart(fig, use_container_width=True)
-if len(view) > len(view_tl):
-    st.caption(f"⚠️ 为图表清晰，时间轴仅展示最近 {len(view_tl)} 笔；完整 {len(view)} 笔见上方明细表。")
+
+legend = (
+    '<div class="legend">'
+    '<span class="lg done">■ 已到达</span>'
+    '<span class="lg active">■ 进行中</span>'
+    '<span class="lg future">■ 未到达</span>'
+    '</div>'
+)
+
+rows_html = ""
+for _, r in view_board.iterrows():
+    dates = r["_dates"]
+    idx = int(r["_idx"])
+    active_idx = idx + 1 if idx + 1 < len(MILESTONES) else None
+    cn = r["中文名"] if r["中文名"] else r["U_OldItemNo"]
+    store = r["CustomerName"] if pd.notna(r["CustomerName"]) else ""
+    qty = r["Qty"] if pd.notna(r["Qty"]) else 0
+    cells = ""
+    for i, (off, name) in enumerate(MILESTONES):
+        d = dates[i]
+        if d <= today:
+            cls = "done"
+        elif i == active_idx:
+            cls = "active"
+        else:
+            cls = "future"
+        cells += f'<td class="{cls}">{d:%m-%d}</td>'
+    rows_html += (
+        '<tr>'
+        f'<td class="info sticky">'
+        f'<div class="cn">{cn}</div>'
+        f'<div class="meta">{r["U_OldItemNo"]} ｜ {store}</div>'
+        f'<div class="qty">数量 {qty:,.0f} · 当前：{r["当前状态"]}</div>'
+        '</td>'
+        f'{cells}'
+        '</tr>'
+    )
+
+css = """
+<style>
+.board-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid #e6e8ec; }
+table.board { border-collapse: separate; border-spacing: 0; min-width: 1000px; font-size: 12px; }
+table.board th, table.board td { padding: 6px 8px; text-align: center; white-space: nowrap; }
+table.board th.stage { background: #f3f5f8; color: #333; font-weight: 600;
+    border-bottom: 2px solid #d9dde3; width: 86px; white-space: normal; line-height: 1.15; vertical-align: bottom; }
+table.board td.info { background: #fff; text-align: left; border-right: 2px solid #e6e8ec; }
+table.board td.sticky { position: sticky; left: 0; z-index: 2; background: #fff; min-width: 168px; }
+.cn { font-weight: 700; color: #1a1a1a; }
+.meta { color: #6b7280; font-size: 11px; }
+.qty { color: #2563eb; font-weight: 600; }
+td.done { background: #2ca02c; color: #fff; }
+td.active { background: #f0a30a; color: #1a1a1a; font-weight: 700; outline: 2px solid #b9790a; }
+td.future { background: #eceff3; color: #9aa3af; }
+.legend { margin: 6px 0 10px; font-size: 12px; }
+.legend .lg { margin-right: 14px; }
+</style>
+"""
+
+html = css + (
+    '<div class="board-wrap">'
+    '<table class="board">'
+    f'<thead><tr><th class="info sticky">SKU / 门店</th>{header_cells}</tr></thead>'
+    f'<tbody>{rows_html}</tbody>'
+    '</table>'
+    '</div>'
+    f'{legend}'
+)
+st.markdown(html, unsafe_allow_html=True)
+
+if len(view) > len(view_board):
+    st.caption(f"⚠️ 看板仅展示最近 {len(view_board)} 笔以便阅读；完整 {len(view)} 笔见上方明细表。")
 
 # ===== 数据刷新（与订单管理一致的上传入口）=====
 st.sidebar.markdown("---")

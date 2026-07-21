@@ -19,6 +19,7 @@ to_dataframe() : 转 pandas，供看板作图。
 import os
 import csv
 import time
+from datetime import datetime
 
 from utils.price_monitor.config import (
     RETAILERS_MONITOR, PERFUME_SKUS, GUARDRAILS, snapshot_date,
@@ -36,27 +37,36 @@ LOCAL_DIR = os.path.abspath(
 # 主流程
 # ============================================================
 def run_monitor(retailers=None, skus=None, headless=None, persist=True):
-    """跑一轮全量抓取，返回 list[PriceRecord]。"""
+    """跑一轮全量抓取，返回 list[PriceRecord]。
+
+    引擎分发
+    --------
+    · 仅当存在 engine=="playwright" 的适配器时才启动浏览器（如海旅）。
+    · 纯 HTTP 适配器（ENGINE=="api"，如中免）无需浏览器，直接发请求，
+      甚至可在 Streamlit Cloud 免费额度等无 chromium 的环境跑。
+    """
     retailers = retailers or RETAILERS_MONITOR
     skus = skus or PERFUME_SKUS
     g = GUARDRAILS
     if headless is None:
         headless = g["headless"]
 
-    # 懒加载 Playwright（仅在真正抓取时要求已安装 chromium）
-    from playwright.sync_api import sync_playwright
+    # 是否需要浏览器：存在任一非 None 且 ENGINE=="playwright" 的适配器
+    need_browser = any(
+        (ADAPTER_REGISTRY.get(r["id"]) is not None)
+        and ADAPTER_REGISTRY.get(r["id"]).ENGINE == "playwright"
+        for r in retailers
+    )
 
     records = []
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
-        ctx = browser.new_context(user_agent=random_ua())
-        page = ctx.new_page()
 
+    def _collect(page):
+        """单家循环；page 对纯 HTTP 适配器为 None 也无妨。"""
         for r in retailers:
             rid = r["id"]
             adapter_cls = ADAPTER_REGISTRY.get(rid)
 
-            # 适配器尚未实现（如 #9 阶段的海控/中服）→ 标记 verify_pending，不阻塞其他家
+            # 适配器尚未实现（如 #9 阶段遗留的海控/中服）→ 标 verify_pending，不阻塞其他家
             if adapter_cls is None:
                 for sku in skus:
                     rec = PriceRecord(
@@ -76,7 +86,18 @@ def run_monitor(retailers=None, skus=None, headless=None, persist=True):
                 records.append(rec)
                 time.sleep(g["min_interval_seconds"])  # 限速
 
-        browser.close()
+    if need_browser:
+        # 懒加载 Playwright（仅在真正需要浏览器时要求已安装 chromium）
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=headless)
+            ctx = browser.new_context(user_agent=random_ua())
+            page = ctx.new_page()
+            _collect(page)
+            browser.close()
+    else:
+        # 全部是纯 HTTP 适配器（如只跑中免）→ 根本不碰浏览器
+        _collect(None)
 
     if persist:
         save_snapshot(records)
@@ -109,7 +130,15 @@ def _ensure_dir():
 
 
 def save_snapshot(records, date=None):
-    """把一轮结果写成当日快照 + latest.csv，并尝试上传 OSS。返回本地路径。"""
+    """把一轮结果写成当日快照 + latest.csv + 每轮独立文件（runs/），并尝试上传 OSS。
+
+    历史建模
+    --------
+    · latest.csv      : 当前轮（看板默认展示）。
+    · YYYY-MM-DD.csv  : 当日最后一次抓取（人读用，可留底）。
+    · runs/YYYY-MM-DDTHHMMSS.csv : 每一轮独立一份，永不覆盖 —— 监控趋势 /
+      降价对比依赖跨「多次抓取」的历史点，同一天多次跑也要保留。
+    """
     date = date or snapshot_date()
     _ensure_dir()
     rows = [r.to_dict() for r in records]
@@ -122,8 +151,19 @@ def save_snapshot(records, date=None):
             w.writeheader()
             w.writerows(rows)
 
+    # 每轮独立历史点：用真实抓取时刻命名，多次跑不互相覆盖
+    runs_dir = os.path.join(LOCAL_DIR, "runs")
+    os.makedirs(runs_dir, exist_ok=True)
+    run_id = datetime.now().strftime("%Y-%m-%dT%H%M%S")
+    run_path = os.path.join(runs_dir, f"{run_id}.csv")
+    with open(run_path, "w", newline="", encoding="utf-8-sig") as f:
+        w = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+        w.writeheader()
+        w.writerows(rows)
+
     _upload_oss(day_path, f"price_monitor/snapshots/{date}.csv")
     _upload_oss(latest_path, "price_monitor/latest.csv")
+    _upload_oss(run_path, f"price_monitor/runs/{run_id}.csv")
     return day_path
 
 
@@ -149,19 +189,38 @@ def load_latest() -> list:
 
 
 def load_history(sku_id, retailer_id=None) -> list:
-    """读某 SKU 的全部历史价格（跨每日快照文件），按时间升序。
-    返回 list[PriceRecord]（status=='ok' 的才有 price）。"""
+    """读某 SKU 的全部历史价格（跨每日快照 + 每轮独立文件 runs/），按时间升序。
+    返回 list[PriceRecord]（status=='ok' 的才有 price）。
+
+    去重：同一轮抓取的记录可能同时出现在「当日快照」和「runs/ 独立文件」中，
+    用 (captured_at, sku_id, retailer_id) 去重，避免重复计数。
+    """
     _ensure_dir()
     hist = []
+    files = []
+    # 每日快照（兼容旧数据，且人读用）
     for fn in sorted(os.listdir(LOCAL_DIR)):
-        if not fn.endswith(".csv") or fn == "latest.csv":
-            continue
-        with open(os.path.join(LOCAL_DIR, fn), "r", encoding="utf-8-sig") as f:
+        if fn.endswith(".csv") and fn != "latest.csv":
+            files.append(os.path.join(LOCAL_DIR, fn))
+    # 每轮独立文件（新：趋势 / 降价对比的主数据源）
+    runs_dir = os.path.join(LOCAL_DIR, "runs")
+    if os.path.isdir(runs_dir):
+        for fn in sorted(os.listdir(runs_dir)):
+            if fn.endswith(".csv"):
+                files.append(os.path.join(runs_dir, fn))
+
+    seen = set()
+    for path in files:
+        with open(path, "r", encoding="utf-8-sig") as f:
             for d in csv.DictReader(f):
                 if d["sku_id"] != sku_id:
                     continue
                 if retailer_id and d["retailer_id"] != retailer_id:
                     continue
+                key = (d.get("captured_at"), d["sku_id"], d["retailer_id"])
+                if key in seen:
+                    continue
+                seen.add(key)
                 hist.append(PriceRecord.from_dict(d))
     hist.sort(key=lambda r: r.captured_at)
     return hist

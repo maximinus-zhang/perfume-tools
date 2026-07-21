@@ -16,8 +16,22 @@
   只有真正跑抓取时才要求 playwright 已安装（部署在阿里云轻量服务器上装 chromium）。
 """
 
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, List, Any
 from utils.price_monitor.models import PriceRecord, now_iso
+
+
+def http_get_json(url: str, params: Dict[str, Any], headers: Dict[str, str], timeout: int = 30) -> Any:
+    """纯标准库 HTTP GET → 解析 JSON（不依赖 requests，cron 服务器零额外依赖）。
+
+    合规护栏：仅发 GET 到公开搜索接口，绝不带登录态 token（中免实测 token 为空即可）。
+    """
+    import json
+    import urllib.parse
+    import urllib.request
+    full = url + "?" + urllib.parse.urlencode(params) if params else url
+    req = urllib.request.Request(full, headers=headers)
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read().decode("utf-8"))
 
 # 随机 UA 池（移动端为主，贴近真实 H5 访问）
 USER_AGENTS = [
@@ -35,6 +49,8 @@ def random_ua() -> str:
 
 class BaseAdapter:
     """适配器基类：子类实现三个钩子即可。"""
+
+    ENGINE = "playwright"  # 子类覆盖为 "api" 表示纯 HTTP 接口适配器（无需浏览器）
 
     def __init__(self, cfg: dict, guardrails: dict, source_label: str = ""):
         self.cfg = cfg
@@ -121,3 +137,67 @@ class BaseAdapter:
             return float(m.group(1).replace(",", ""))
         except ValueError:
             return None
+
+
+class ApiBaseAdapter(BaseAdapter):
+    """纯 HTTP 接口适配器基类（无需浏览器）。
+
+    子类只需实现：
+        api_url        : 搜索接口完整 URL
+        build_params(sku)   : 构造查询参数
+        parse_items(json)   : 从响应取出商品列表
+        match_product(items, sku) -> (item|None)
+        extract(item, sku)  : 返回 (price, product_url, note)
+    基类 run() 统一处理 HTTP 调用 / 重试兜底 / 组装记录。
+    """
+
+    ENGINE = "api"
+
+    def run(self, sku: dict, page=None) -> PriceRecord:
+        rec = self._blank_record(sku)
+        try:
+            params = self.build_params(sku)
+            headers = self.request_headers()
+            data = http_get_json(self.api_url, params, headers, timeout=self.g["timeout_seconds"])
+            items = self.parse_items(data) or []
+            item = self.match_product(items, sku)
+            if not item:
+                rec.status = "not_found"
+                rec.note = "搜索无匹配商品"
+                return self._finalize(rec)
+            price, url, note = self.extract(item, sku)
+            if price is None:
+                rec.status = "not_found"
+                rec.note = note or "商品存在但无价格字段"
+            else:
+                rec.price = price
+                rec.product_url = url or ""
+                rec.note = note
+                rec.status = "ok"
+        except Exception as e:  # 单次失败由 fetcher 统一重试
+            rec.status = "error"
+            rec.note = f"{type(e).__name__}: {e}"
+        return self._finalize(rec)
+
+    # 子类可覆盖
+    def request_headers(self) -> dict:
+        return {
+            "User-Agent": random_ua(),
+            "appversion": "10.12.60",
+            "channel": "big_frontend_h5",
+            "token": "",
+            "os": "h5",
+            "Content-Type": "application/json",
+        }
+
+    def build_params(self, sku: dict) -> dict:  # pragma: no cover - 子类实现
+        raise NotImplementedError
+
+    def parse_items(self, data: Any) -> List[dict]:  # pragma: no cover - 子类实现
+        raise NotImplementedError
+
+    def match_product(self, items: List[dict], sku: dict) -> Optional[dict]:  # pragma: no cover
+        raise NotImplementedError
+
+    def extract(self, item: dict, sku: dict) -> Tuple[Optional[float], str, str]:  # pragma: no cover
+        raise NotImplementedError
