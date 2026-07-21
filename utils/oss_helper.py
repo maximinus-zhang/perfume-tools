@@ -33,6 +33,9 @@ def read_excel_from_oss(remote_path: str, sheet_name: int = 1, prefix_filter: st
     """
     try:
         bucket = get_bucket()
+        # 文件尚未上传 / 不存在 → 静默返回空，让调用方回落本地，避免弹红色错误
+        if not bucket.object_exists(remote_path):
+            return pd.DataFrame()
         obj = bucket.get_object(remote_path)
         
         # 先读取全部数据（不指定 header），扫描找到真正的表头行

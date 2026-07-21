@@ -29,6 +29,9 @@ try:
         estimate_store_sales, estimate_by_retailer,
         ESTIMATE_BADGE, ESTIMATE_DISCLAIMER, RETAILER_SHARE,
     )
+    from utils.news_analyzer import (
+        fetch_news_cached, analyze_news_for_context, render_insight_markdown,
+    )
     _IMPORT_OK = True
     _IMPORT_ERR = ""
 except Exception as _e:  # 非裸 except，明确捕获
@@ -44,6 +47,38 @@ if not _IMPORT_OK:
         f"请检查 utils/hainan_estimator.py、hainan_retailers.py、hainan_2026_data.py 是否存在。"
     )
     st.stop()
+
+
+# ============================================================
+# 新闻自动分析（防御性：失败不影响主看板）
+# ============================================================
+try:
+    _news_data = fetch_news_cached()
+    _all_news = []
+    for k in ["airport_news", "duty_free_news", "li_island_news", "policy_news", "travel_news"]:
+        items = _news_data.get(k, [])
+        for item in items:
+            if isinstance(item, (tuple, list)):
+                if len(item) >= 2:
+                    _all_news.append((item[0], item[1]))
+                else:
+                    _all_news.append((str(item[0]), ""))
+            else:
+                _all_news.append((str(item), ""))
+except Exception as _ne:
+    _all_news = []
+    st.caption(f"📰 新闻加载失败，自动备注暂不可用：{_ne}")
+
+
+def show_insight(context, max_bullets=3):
+    """在模块下方渲染新闻自动分析备注。"""
+    try:
+        if not _all_news:
+            return
+        bullets = analyze_news_for_context(_all_news, context, max_bullets=max_bullets)
+        st.markdown(render_insight_markdown(bullets))
+    except Exception as e:
+        st.caption(f"🤖 新闻备注生成失败：{e}")
 
 
 # ============================================================
@@ -72,6 +107,7 @@ c3.metric("H1 件数", f"{ytd['pieces_2026']} 万件", f"{ytd['pc_yoy']}% YoY",
 
 # 门店级估算强提醒（MAX 重点要求）
 st.warning(ESTIMATE_DISCLAIMER, icon="⚠️")
+show_insight("hainan_overview", max_bullets=3)
 
 
 # ============================================================
@@ -117,6 +153,7 @@ for r in retailers_est:
 r_df = pd.DataFrame(r_rows)
 st.dataframe(r_df, use_container_width=True, hide_index=True)
 st.caption("说明：占比为代理假设（RETAILER_SHARE），非逐店实测；数值随上方锚点联动。")
+show_insight("retailer_overview", max_bullets=3)
 
 
 # ============================================================
@@ -144,6 +181,7 @@ st.markdown(
     f"「分摊方法」列可追溯计算来源；**请勿当作各店实测值**。",
     unsafe_allow_html=True,
 )
+show_insight("store_overview", max_bullets=3)
 
 # 下载 CSV（便于交接给同事，且字段已带 is_estimate / source）
 csv_df = pd.DataFrame([{
@@ -167,6 +205,7 @@ chart_df = pd.DataFrame(stores)
 chart_df = chart_df.set_index("store")["sales_h1_est"].sort_values()
 st.bar_chart(chart_df)
 st.caption("柱越高代表按权重分摊出的体量越大；仅为估算分布，非实测排名。")
+show_insight("store_overview", max_bullets=2)
 
 
 # ============================================================
@@ -190,6 +229,7 @@ with st.expander("📋 零售商 / 门店主数据（合作方全清单）", exp
                 f"  - **{s['name']}**（{s.get('city')} / {s.get('type')}）"
                 f" 权重 {s.get('weight'):.0%} — {s.get('note')}"
             )
+show_insight("retailer_overview", max_bullets=3)
 
 
 # ============================================================

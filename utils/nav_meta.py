@@ -19,7 +19,6 @@ NAV = {
         {"path": "pages/sell_in/1_order_fulfillment_analysis.py", "title": "订单满足率分析", "icon": "✅"},
         {"path": "pages/sell_in/8_合同审查工具.py",           "title": "合同审查工具",     "icon": "📄"},
         {"path": "pages/sell_in/7_需求预测.py",               "title": "需求预测",         "icon": "📈"},
-        {"path": "pages/sell_in/9_需求预测_statsmodels.py",   "title": "需求预测(SARIMA)", "icon": "📊"},
         {"path": "pages/sell_in/2_发货明细生成工具.py",       "title": "发货明细生成工具", "icon": "📊"},
     ],
     "🚚 物流模块": [

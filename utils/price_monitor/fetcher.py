@@ -22,7 +22,7 @@ import time
 from datetime import datetime
 
 from utils.price_monitor.config import (
-    RETAILERS_MONITOR, PERFUME_SKUS, GUARDRAILS, snapshot_date,
+    RETAILERS_MONITOR, PERFUME_SKUS, ALL_MONITOR_SKUS, GUARDRAILS, snapshot_date,
 )
 from utils.price_monitor.models import PriceRecord, CSV_COLUMNS, now_iso
 from utils.price_monitor.adapters import ADAPTER_REGISTRY
@@ -46,7 +46,7 @@ def run_monitor(retailers=None, skus=None, headless=None, persist=True):
       甚至可在 Streamlit Cloud 免费额度等无 chromium 的环境跑。
     """
     retailers = retailers or RETAILERS_MONITOR
-    skus = skus or PERFUME_SKUS
+    skus = skus or ALL_MONITOR_SKUS
     g = GUARDRAILS
     if headless is None:
         headless = g["headless"]

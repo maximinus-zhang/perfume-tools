@@ -26,6 +26,8 @@ class PriceRecord:
     name_en: str
     size_ml: str
     price: Optional[float] = None          # 公开标价（CNY）；未抓到为 None
+    sales_price: Optional[float] = None     # 有税参考价（专柜/含税价），用于算「免税省%」
+    promo_label: str = ""                   # 促销标签（秒杀价 / 促销 等）
     currency: str = "CNY"
     product_url: str = ""                   # 商品/搜索页 URL（来源可追溯）
     captured_at: str = ""                   # 抓取时间 ISO 8601
@@ -41,7 +43,24 @@ class PriceRecord:
     @classmethod
     def from_dict(cls, d: dict) -> "PriceRecord":
         known = {k: v for k, v in d.items() if k in cls.__dataclass_fields__}
+        # CSV DictReader 全部返回 str；对数值 / 布尔字段做类型强转
+        raw = known.get("price")
+        if raw is not None:
+            known["price"] = float(raw) if raw != "" else None
+        raw_sales = known.get("sales_price")
+        if raw_sales is not None:
+            known["sales_price"] = float(raw_sales) if raw_sales != "" else None
+        raw_est = known.get("is_estimate")
+        if isinstance(raw_est, str):
+            known["is_estimate"] = raw_est.lower() in ("true", "1")
         return cls(**known)
+
+    @property
+    def discount_rate(self) -> Optional[float]:
+        """免税省% = (有税参考价 − 实际免税价) / 有税参考价；缺字段返回 None。"""
+        if self.sales_price and self.price and self.sales_price > 0:
+            return (self.sales_price - self.price) / self.sales_price
+        return None
 
     @property
     def ok(self) -> bool:
@@ -51,8 +70,9 @@ class PriceRecord:
 # CSV 表头顺序（看板 / 下载统一使用）
 CSV_COLUMNS = [
     "captured_at", "retailer_id", "retailer_name", "sku_id", "brand",
-    "name_cn", "name_en", "size_ml", "category", "price", "currency",
-    "product_url", "source", "status", "note", "is_estimate",
+    "name_cn", "name_en", "size_ml", "category", "price", "sales_price",
+    "promo_label", "currency", "product_url", "source", "status", "note",
+    "is_estimate",
 ]
 
 

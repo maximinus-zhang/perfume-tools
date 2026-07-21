@@ -14,17 +14,11 @@ from datetime import datetime
 from utils.hainan_scraper import HainanScraper, AIRPORT_DB
 from utils.hainan_2026_data import HA_DF_2026, AIRPORT_INTL, SOURCE_NOTE
 from utils.customs_parser import build_monthly_from_xlsx, try_cdp_fetch, XLSX_DIR, customs_folder_stats
+from utils.news_analyzer import (
+    fetch_news_cached, analyze_news_for_context, render_insight_markdown,
+)
 
 st.set_page_config(page_title="全国免税商情监控 2026", page_icon="🏝️", layout="wide")
-
-# ============================================================
-# 缓存
-# ============================================================
-
-@st.cache_data(ttl=86400, show_spinner="🔄 正在爬取最新数据，请稍候...")
-def get_scraped_data(force_refresh=False):
-    scraper = HainanScraper()
-    return scraper.scrape_all()
 
 # ============================================================
 # 顶部
@@ -62,7 +56,7 @@ if "customs_by_ym" not in st.session_state:
         f"已加载本地 xlsx/：{len(_recs)} 个月报（点右上『重新解析本地月报』可刷新）"
     )
 
-data = get_scraped_data()
+data = fetch_news_cached()
 today = data.get("date", datetime.now().strftime("%Y-%m-%d"))
 
 total_news = sum(len(data.get(k, [])) for k in
@@ -92,6 +86,24 @@ def safe_news(data, key):
         else:
             result.append((str(item), ""))
     return result
+
+
+def all_news_items(data):
+    """把所有类别的新闻合并成一个 (title, url) 列表，用于模块级自动分析。"""
+    items = []
+    for k in ["airport_news", "duty_free_news", "li_island_news", "policy_news", "travel_news"]:
+        items.extend(safe_news(data, k))
+    return items
+
+
+def show_insight(context, max_bullets=3):
+    """在模块下方渲染新闻自动分析备注（失败不阻断页面）。"""
+    try:
+        bullets = analyze_news_for_context(all_news_items(data), context, max_bullets=max_bullets)
+        md = render_insight_markdown(bullets)
+        st.markdown(md)
+    except Exception as e:
+        st.caption(f"🤖 新闻备注生成失败：{e}")
 
 def fmt_growth(val_25, val_24):
     if val_24 and val_24 > 0:
@@ -247,6 +259,7 @@ with c3:
     st.metric("购物件数", f"{yd['pieces_2026']} 万",
               delta=f"vs25年 {yd['pieces_2025']}万 · {yd['pc_yoy']:+.1f}%")
 st.caption(f"📌 YTD 口径：{yd['date_label']} ｜ 数据来源：{yd['source']}")
+show_insight("hainan_overview", max_bullets=3)
 
 # 季度 + 月度YTD
 st.markdown("**📈 季度对比（金额 亿元 · 2026 vs 2025）**")
@@ -256,6 +269,7 @@ q_show = qd[["q", "amt26", "amt25", "yoy", "pax26", "pax25", "yoy_pax", "amt_src
 q_show.columns = ["季度", "2026金额", "2025金额", "金额同比%", "2026人数", "2025人数", "人数同比%",
                    "数据来源", "说明"]
 st.dataframe(q_show, width='stretch', hide_index=True)
+show_insight("quarterly", max_bullets=3)
 
 st.markdown("**📅 月度 YTD 进度（亿元 / 万人次）**")
 _merged = merge_customs_monthly(HA_DF_2026["monthly_ytd"], st.session_state["customs_by_ym"])
@@ -270,6 +284,7 @@ m_show = m_show[["m", "amt26", "amt25", "pax26", "pax25", "来源"]]
 m_show.columns = ["月份", "2026金额", "2025金额", "2026人数", "2025人数", "来源标注"]
 st.dataframe(m_show, width='stretch', hide_index=True)
 st.caption("💡 1–5月为海关《离岛免税销售情况表》XLSX 真实值（🟢XLSX实时）；6月=H1−Σ1-5 反推；H1/Q1为官方累计口径。点右上『重新解析本地月报』可刷新。")
+show_insight("monthly", max_bullets=3)
 
 # 节点专项
 st.markdown("**🎪 重要消费节点（2026 · 官方）**")
@@ -290,6 +305,7 @@ with st.expander("📜 政策动销（2025-11-01 新政 + 封关）"):
         st.markdown(f"  - {e}")
     st.markdown(f"- **限购**：{p['limits']}")
     st.caption(f"来源：{p['source']}")
+show_insight("policy", max_bullets=3)
 
 # 省级入境游（境外游客客流）
 st.markdown("**🌍 海南入境游（境外游客客流 · 省级口径）**")
@@ -304,6 +320,7 @@ with i3:
 with i4:
     st.metric("境外航线", f"{ib['intl_routes']} 条 / {ib['route_countries']} 国地")
 st.caption(f"📌 {ib['asof']} ｜ 来源：{ib['source']} ｜ {ib['note']}")
+show_insight("travel", max_bullets=3)
 
 # ============================================================
 # 模块一·附：月度数据深度分析（海关 XLSX 真实值）
@@ -384,6 +401,7 @@ st.info(
     "补货计划勿按 Q1 斜率外推，建议按『中性情景』(全年约 +12.6%) 做滚动预测并防库存堆积。\n"
     "③ 6月(反推)~15亿为上半年低点，7–8月暑运通常回升，可结合实时月报动态调整。"
 )
+show_insight("monthly", max_bullets=3)
 
 # ============================================================
 # 模块二：12大机场核心指标（2025 vs 2024）
@@ -425,6 +443,7 @@ for i, code in enumerate(airport_keys[6:]):
             delta=f"+{a25 - a24}万 (+{growth}%)  |  全国第{rank}",
             help=f"2025: {a25}万 | 2024: {a24}万 | 增量: +{a25 - a24}万 | 国内 {dom}% | 国际 {intl}%"
         )
+show_insight("airport_overview", max_bullets=3)
 
 # ============================================================
 # 模块三：机场吞吐量对比图（2025 vs 2024）
@@ -551,6 +570,7 @@ with st.expander("📊 查看月度明细对比数据"):
         for i in range(12)
     ]
     st.dataframe(monthly_detail, width='stretch', hide_index=True)
+show_insight("airport_monthly", max_bullets=3)
 
 # ============================================================
 # 模块六：航站楼 & 航线总览（含机场境外客流 Tab）

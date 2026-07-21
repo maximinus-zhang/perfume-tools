@@ -127,6 +127,67 @@ PERFUME_SKUS = [
     {"id": "coach_edp", "brand": "蔻驰", "name_cn": "同名", "name_en": "Coach EDP", "size_ml": "50/90", "keyword": "蔻驰香水", "category": "香水"},
 ]
 
+# ============================================================
+# 💄 彩妆主力 SKU（竞品对标清单，category=彩妆）
+# ============================================================
+MAKEUP_SKUS = [
+    {"id": "dior_rouge", "brand": "迪奥", "name_cn": "烈艳蓝金唇膏", "name_en": "Dior Rouge", "size_ml": "3.5g", "keyword": "迪奥烈艳蓝金唇膏", "category": "彩妆"},
+    {"id": "ysl_rougepur", "brand": "圣罗兰", "name_cn": "小金条唇釉", "name_en": "YSL Rouge Pur", "size_ml": "2.2g", "keyword": "圣罗兰小金条", "category": "彩妆"},
+    {"id": "armani_red", "brand": "阿玛尼", "name_cn": "红管唇釉", "name_en": "Armani Lip Maestro", "size_ml": "6.5ml", "keyword": "阿玛尼红管唇釉", "category": "彩妆"},
+    {"id": "lancome_rouge", "brand": "兰蔻", "name_cn": "菁纯唇膏", "name_en": "Lancome L'Absolu", "size_ml": "3.4g", "keyword": "兰蔻菁纯唇膏", "category": "彩妆"},
+    {"id": "estee_rouge", "brand": "雅诗兰黛", "name_cn": "倾慕唇膏", "name_en": "Estee Lauder Pure Color", "size_ml": "3.5g", "keyword": "雅诗兰黛倾慕唇膏", "category": "彩妆"},
+    {"id": "tf_lip", "brand": "汤姆福特", "name_cn": "黑管唇膏", "name_en": "Tom Ford Lip Color", "size_ml": "3g", "keyword": "汤姆福特唇膏", "category": "彩妆"},
+    {"id": "mac_bullet", "brand": "魅可", "name_cn": "子弹头唇膏", "name_en": "MAC Retro Matte", "size_ml": "3g", "keyword": "魅可子弹头唇膏", "category": "彩妆"},
+    {"id": "dior_forever", "brand": "迪奥", "name_cn": "凝脂恒久粉底液", "name_en": "Dior Forever", "size_ml": "30ml", "keyword": "迪奥凝脂恒久粉底液", "category": "彩妆"},
+    {"id": "estee_dw", "brand": "雅诗兰黛", "name_cn": "DW粉底液", "name_en": "Double Wear", "size_ml": "30ml", "keyword": "雅诗兰黛DW粉底液", "category": "彩妆"},
+    {"id": "ysl_touche", "brand": "圣罗兰", "name_cn": "明彩笔", "name_en": "Touche Eclat", "size_ml": "2.5ml", "keyword": "圣罗兰明彩笔", "category": "彩妆"},
+    {"id": "cpb_lip", "brand": "肌肤之钥", "name_cn": "唇膏", "name_en": "CPB Lipstick", "size_ml": "3.8g", "keyword": "肌肤之钥唇膏", "category": "彩妆"},
+    {"id": "nars_powder", "brand": "NARS", "name_cn": "裸光蜜粉饼", "name_en": "NARS Light Reflecting", "size_ml": "10g", "keyword": "NARS 蜜粉饼", "category": "彩妆"},
+]
+
+# ============================================================
+# 🧴 护肤主力 SKU（竞品对标清单，category=护肤）
+# ============================================================
+SKINCARE_SKUS = [
+    {"id": "el_anr", "brand": "雅诗兰黛", "name_cn": "小棕瓶精华", "name_en": "Advanced Night Repair", "size_ml": "30/50ml", "keyword": "雅诗兰黛小棕瓶", "category": "护肤"},
+    {"id": "lancome_genifique", "brand": "兰蔻", "name_cn": "小黑瓶精华", "name_en": "Genifique", "size_ml": "30/50ml", "keyword": "兰蔻小黑瓶", "category": "护肤"},
+    {"id": "skii_essence", "brand": "SK-II", "name_cn": "神仙水", "name_en": "Facial Treatment Essence", "size_ml": "75/160ml", "keyword": "SK-II 神仙水", "category": "护肤"},
+    {"id": "lamer_cream", "brand": "海蓝之谜", "name_cn": "精华面霜", "name_en": "Crème de la Mer", "size_ml": "30/60ml", "keyword": "海蓝之谜面霜", "category": "护肤"},
+    {"id": "shiseido_ultimate", "brand": "资生堂", "name_cn": "红妍肌活精华", "name_en": "Ultimate Revitalizer", "size_ml": "30/50ml", "keyword": "资生堂红妍肌活精华", "category": "护肤"},
+    {"id": "skinceuticals_ce", "brand": "修丽可", "name_cn": "维生素CE精华", "name_en": "C E Ferulic", "size_ml": "30ml", "keyword": "修丽可CE精华", "category": "护肤"},
+    {"id": "hr_cream", "brand": "赫莲娜", "name_cn": "黑绷带面霜", "name_en": "Replasty Cream", "size_ml": "50ml", "keyword": "赫莲娜黑绷带面霜", "category": "护肤"},
+    {"id": "clarins_double", "brand": "娇韵诗", "name_cn": "双萃精华", "name_en": "Double Serum", "size_ml": "30/50ml", "keyword": "娇韵诗双萃精华", "category": "护肤"},
+    {"id": "kiehls_ultra", "brand": "科颜氏", "name_cn": "高保湿面霜", "name_en": "Ultra Facial Cream", "size_ml": "50/125ml", "keyword": "科颜氏高保湿面霜", "category": "护肤"},
+    {"id": "sulwhasoo_first", "brand": "雪花秀", "name_cn": "润燥精华", "name_en": "First Care", "size_ml": "60ml", "keyword": "雪花秀润燥精华", "category": "护肤"},
+    {"id": "lancome_absolue", "brand": "兰蔻", "name_cn": "菁纯面霜", "name_en": "Absolue", "size_ml": "60ml", "keyword": "兰蔻菁纯面霜", "category": "护肤"},
+    {"id": "el_revit", "brand": "雅诗兰黛", "name_cn": "白金面霜", "name_en": "Re-Nutriv", "size_ml": "50ml", "keyword": "雅诗兰黛白金面霜", "category": "护肤"},
+]
+
+# ============================================================
+# 🗂️ 全品类监控清单（看板默认全量抓取；也用于 sku_by_id 检索）
+# ============================================================
+ALL_MONITOR_SKUS = PERFUME_SKUS + MAKEUP_SKUS + SKINCARE_SKUS
+
+# ============================================================
+# 🏷️ 品类信号词（与 cdf_api.match_product / detect_category 共用）
+# ============================================================
+CATEGORY_HINTS = {
+    "香水": ("香水", "香型", "淡香", "浓香", "香氛", "香精", "香体", "发香", "edp", "edt", "parfum"),
+    "彩妆": ("口红", "唇膏", "唇釉", "唇蜜", "丰唇", "润唇", "唇彩", "粉底", "眼影", "腮红",
+             "睫毛膏", "遮瑕", "散粉", "气垫", "彩妆", "妆前", "眉笔", "眼线", "高光", "甲油"),
+    "护肤": ("面霜", "精华", "水乳", "眼霜", "洁面", "面膜", "乳液", "护肤", "防晒",
+             "爽肤水", "化妆水", "柔肤水", "保湿", "护肤水"),
+}
+
+# ============================================================
+# 🛒 品牌货架速览目录（「品牌货架速览」模式：按 品类 + 品牌 实时拉取中免在售）
+# ============================================================
+BRAND_SHELF = {
+    "香水": ["香奈儿", "迪奥", "祖玛珑", "汤姆福特", "爱马仕", "圣罗兰", "阿玛尼", "古驰", "宝格丽", "娇兰", "蔻依", "范思哲"],
+    "彩妆": ["迪奥", "圣罗兰", "阿玛尼", "兰蔻", "雅诗兰黛", "汤姆福特", "魅可", "香奈儿", "NARS", "纪梵希", "肌肤之钥", "植村秀"],
+    "护肤": ["雅诗兰黛", "兰蔻", "SK-II", "海蓝之谜", "资生堂", "修丽可", "赫莲娜", "娇韵诗", "科颜氏", "雪花秀", "肌肤之钥", "莱珀妮"],
+}
+
 
 def snapshot_date() -> str:
     """返回当前快照日期（YYYY-MM-DD），用作 OSS 分区与文件名。"""
@@ -134,7 +195,7 @@ def snapshot_date() -> str:
 
 
 def sku_by_id(sku_id: str) -> dict | None:
-    for s in PERFUME_SKUS:
+    for s in ALL_MONITOR_SKUS:
         if s["id"] == sku_id:
             return s
     return None
