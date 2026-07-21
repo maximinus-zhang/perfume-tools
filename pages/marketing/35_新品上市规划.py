@@ -19,15 +19,45 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 
-# ===== 路径定位（无论 app 从哪启动都能找到项目根与数据文件）=====
+# ===== 路径定位（兼容本地运行 / 容器部署等多种环境）=====
+import os, sys
+
 PAGE_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(PAGE_DIR, "..", ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-DATA_PATH = os.path.join(PROJECT_ROOT, "data", "newness_encrypted.bin")
-
 from utils.newness_crypto import decrypt_data
+
+
+def _find_data_path() -> str:
+    """按优先级依次探测 newness_encrypted.bin 的实际位置，返回第一个存在的路径。"""
+    candidates = [
+        # ① 从本页文件往上推两层（标准项目结构）
+        os.path.join(PROJECT_ROOT, "data", "newness_encrypted.bin"),
+        # ② 从当前工作目录（streamlit run 启动目录）
+        os.path.join(os.getcwd(), "data", "newness_encrypted.bin"),
+        # ③ 直接从 app.py 所在目录
+        os.path.join(os.path.dirname(os.path.abspath(PROJECT_ROOT + "/app.py")),
+                     "data", "newness_encrypted.bin"),
+    ]
+    # 去重（保留顺序）
+    seen = set()
+    unique = []
+    for p in candidates:
+        rp = os.path.realpath(p)
+        if rp not in seen:
+            seen.add(rp)
+            unique.append(p)
+
+    for p in unique:
+        if os.path.isfile(p):
+            return p
+    # 都找不到 → 返回第一个候选路径（让后续 open 报错时给出明确路径）
+    return candidates[0]
+
+
+DATA_PATH = _find_data_path()
 
 st.title("🎯 新品上市规划 · 2026 NEWNESS")
 
@@ -56,6 +86,12 @@ def try_unlock():
     except PermissionError:
         st.session_state[SESSION_AUTH] = False
         st.session_state[SESSION_ERR] = "🔒 密码错误，请重试"
+    except FileNotFoundError:
+        st.session_state[SESSION_AUTH] = False
+        st.session_state[SESSION_ERR] = (
+            f"⚠️ 找不到加密数据文件：\n`{DATA_PATH}`\n\n"
+            f"请确认 `data/newness_encrypted.bin` 已放在项目根目录的 `data/` 文件夹下。"
+        )
     except Exception as e:                       # 文件损坏等其它异常
         st.session_state[SESSION_AUTH] = False
         st.session_state[SESSION_ERR] = f"解密失败：{e}"
