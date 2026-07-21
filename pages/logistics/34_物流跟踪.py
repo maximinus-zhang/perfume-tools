@@ -249,14 +249,18 @@ table.board th, table.board td { padding: 5px 4px; text-align: center;
 table.board th.stage { background: #f3f5f8; color: #333; font-weight: 600;
     border-bottom: 2px solid #d9dde3; white-space: normal; line-height: 1.15;
     vertical-align: bottom; font-size: 11px; }
-table.board td.info { background: #fff; text-align: left; border-right: 2px solid #e6e8ec;
-                     width: 22%; }
-table.board td.sticky { position: sticky; left: 0; z-index: 2; background: #fff;
+table.board th.info, table.board td.info { text-align: left; border-right: 2px solid #e6e8ec;
+                     width: 32%; min-width: 220px; padding: 6px 8px; }
+table.board th.info { background: #f3f5f8; }
+table.board td.info { background: #fff; }
+table.board th.sticky, table.board td.sticky { position: sticky; left: 0; z-index: 2;
                        box-shadow: 2px 0 4px rgba(0,0,0,.06); }
-.cn { font-weight: 700; color: #1a1a1a; font-size: 12px; white-space: nowrap;
-      overflow: hidden; text-overflow: ellipsis; }
-.meta { color: #6b7280; font-size: 10px; white-space: nowrap;
-        overflow: hidden; text-overflow: ellipsis; }
+table.board th.sticky { background: #f3f5f8; }
+table.board td.sticky { background: #fff; }
+.cn { font-weight: 700; color: #1a1a1a; font-size: 12px; white-space: normal;
+      overflow: visible; text-overflow: clip; line-height: 1.35; word-break: break-word; }
+.meta { color: #6b7280; font-size: 10px; white-space: normal;
+        overflow: visible; text-overflow: clip; line-height: 1.3; word-break: break-word; }
 .qty { color: #2563eb; font-weight: 600; font-size: 11px; }
 td.done { background: #2ca02c; color: #fff; font-size: 11px; }
 td.active { background: #f0a30a; color: #1a1a1a; font-weight: 700; font-size: 11px;
