@@ -38,10 +38,9 @@ if %ERRORLEVEL% EQU 0 (
 echo.
 
 echo Step 2: Starting local Streamlit...
-if not exist "venv\Scripts\python.exe" python -m venv venv
-venv\Scripts\python.exe -m pip install --upgrade -r requirements.txt
+python -m pip install --upgrade -r requirements.txt
 echo 应用启动后请在浏览器打开: http://localhost:8501
-venv\Scripts\python.exe -m streamlit run app.py
+python -m streamlit run app.py
 
 :: 清理锁文件
 del "%LOCK_FILE%" 2>nul
