@@ -171,11 +171,18 @@ st.dataframe(
     table,
     use_container_width=True,
     hide_index=True,
+    height=min(420, max(280, len(table) * 32 + 40)),
     column_config={
-        "进度%": st.column_config.ProgressColumn(
-            "进度%", min_value=0, max_value=100, format="%d%%"
+        "发货日": st.column_config.TextColumn("发货日", width="small"),
+        "门店":   st.column_config.TextColumn("门店",   width="medium"),
+        "发票号": st.column_config.TextColumn("发票号", width="small"),
+        "货号":   st.column_config.TextColumn("货号",   width="medium"),
+        "中文名": st.column_config.TextColumn("中文名", width="medium"),
+        "数量":   st.column_config.NumberColumn("数量",   width="small", format="%d"),
+        "当前状态": st.column_config.TextColumn("当前状态", width="small"),
+        "进度%":  st.column_config.ProgressColumn(
+            "进度%", min_value=0, max_value=100, format="%d%%", width="medium"
         ),
-        "当前状态": st.column_config.TextColumn("当前状态"),
     },
 )
 
@@ -232,19 +239,29 @@ for _, r in view_board.iterrows():
 
 css = """
 <style>
-.board-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid #e6e8ec; }
-table.board { border-collapse: separate; border-spacing: 0; min-width: 1000px; font-size: 12px; }
-table.board th, table.board td { padding: 6px 8px; text-align: center; white-space: nowrap; }
+.board-wrap { overflow-x: auto; border-radius: 12px; border: 1px solid #e6e8ec;
+             max-width: 100%; }
+table.board { border-collapse: separate; border-spacing: 0; width: 100%;
+              table-layout: fixed; font-size: 12px; }
+table.board th, table.board td { padding: 5px 4px; text-align: center;
+                                white-space: nowrap; overflow: hidden;
+                                text-overflow: ellipsis; }
 table.board th.stage { background: #f3f5f8; color: #333; font-weight: 600;
-    border-bottom: 2px solid #d9dde3; width: 86px; white-space: normal; line-height: 1.15; vertical-align: bottom; }
-table.board td.info { background: #fff; text-align: left; border-right: 2px solid #e6e8ec; }
-table.board td.sticky { position: sticky; left: 0; z-index: 2; background: #fff; min-width: 168px; }
-.cn { font-weight: 700; color: #1a1a1a; }
-.meta { color: #6b7280; font-size: 11px; }
-.qty { color: #2563eb; font-weight: 600; }
-td.done { background: #2ca02c; color: #fff; }
-td.active { background: #f0a30a; color: #1a1a1a; font-weight: 700; outline: 2px solid #b9790a; }
-td.future { background: #eceff3; color: #9aa3af; }
+    border-bottom: 2px solid #d9dde3; white-space: normal; line-height: 1.15;
+    vertical-align: bottom; font-size: 11px; }
+table.board td.info { background: #fff; text-align: left; border-right: 2px solid #e6e8ec;
+                     width: 22%; }
+table.board td.sticky { position: sticky; left: 0; z-index: 2; background: #fff;
+                       box-shadow: 2px 0 4px rgba(0,0,0,.06); }
+.cn { font-weight: 700; color: #1a1a1a; font-size: 12px; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis; }
+.meta { color: #6b7280; font-size: 10px; white-space: nowrap;
+        overflow: hidden; text-overflow: ellipsis; }
+.qty { color: #2563eb; font-weight: 600; font-size: 11px; }
+td.done { background: #2ca02c; color: #fff; font-size: 11px; }
+td.active { background: #f0a30a; color: #1a1a1a; font-weight: 700; font-size: 11px;
+           outline: 2px solid #b9790a; }
+td.future { background: #eceff3; color: #9aa3af; font-size: 11px; }
 .legend { margin: 6px 0 10px; font-size: 12px; }
 .legend .lg { margin-right: 14px; }
 </style>
