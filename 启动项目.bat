@@ -31,7 +31,7 @@ echo.
 echo Step 2: Starting local Streamlit...
 if not exist "venv\Scripts\activate.bat" python -m venv venv
 call venv\Scripts\activate.bat
-pip install -r requirements.txt --quiet
+pip install --upgrade -r requirements.txt --quiet
 
 echo 应用启动后请在浏览器打开: http://localhost:8501
 streamlit run app.py

@@ -21,7 +21,6 @@ NAV = {
     ],
     "🚚 物流模块": [
         {"path": "pages/logistics/34_物流跟踪.py",            "title": "发货物流跟踪",     "icon": "📍"},
-        {"path": "pages/logistics/9_订单管理.py",             "title": "订单管理",         "icon": "📦"},
     ],
     "🎯 新品上市规划": [
         {"path": "pages/marketing/35_新品上市规划.py",        "title": "新品上市规划（加密）", "icon": "🔐"},

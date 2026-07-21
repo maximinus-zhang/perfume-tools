@@ -2,6 +2,16 @@ import streamlit as st
 from datetime import datetime
 from utils.nav_meta import NAV
 
+# 防御：st.navigation 需要 Streamlit >= 1.36，版本过低时明确提示，避免静默失效
+if not hasattr(st, "navigation"):
+    st.error(
+        "⚠️ 当前 Streamlit 版本过低，不支持侧边栏导航（st.navigation 需要 >= 1.36）。\n\n"
+        "请在命令行（已激活 venv）执行：\n"
+        "    pip install --upgrade streamlit\n"
+        "然后重新启动本应用。"
+    )
+    st.stop()
+
 st.set_page_config(
     page_title="香水供应链小助手",
     page_icon="📦",
