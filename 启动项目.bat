@@ -34,6 +34,6 @@ call venv\Scripts\activate.bat
 pip install --upgrade -r requirements.txt --quiet
 
 echo 应用启动后请在浏览器打开: http://localhost:8501
-streamlit run app.py
+python -m streamlit run app.py
 
 pause
