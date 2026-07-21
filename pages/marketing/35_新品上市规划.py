@@ -74,10 +74,13 @@ if not st.session_state.get(SESSION_AUTH, False):
     )
     pw = st.text_input("访问密码", type="password", key="newness_pw",
                        placeholder="请输入密码", help="密码由负责人提供，不显示在页面上")
-    st.button("🔓 解锁查看", type="primary", use_container_width=True, on_click=try_unlock)
+    if st.button("🔓 解锁查看", type="primary", use_container_width=True):
+        try_unlock()
     if st.session_state.get(SESSION_ERR):
         st.error(st.session_state[SESSION_ERR])
-    st.stop()
+    # 只有「仍未解锁」才停在此页；解锁成功后继续往下渲染看板（同一次运行内）
+    if not st.session_state.get(SESSION_AUTH, False):
+        st.stop()
 
 
 # 已解锁：提供重新上锁按钮
