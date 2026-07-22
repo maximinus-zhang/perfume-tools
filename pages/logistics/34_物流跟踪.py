@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-📍 物流跟踪页面 —— 按 SKU + 门店查询「今年每笔发货」的物流状态与时间轴
+📍 物流跟踪页面 —— 按 品牌 + SKU + 门店 查询「今年每笔发货」的物流状态与时间轴
 ========================================================================
 数据来源（均从阿里云 OSS 读取，与订单管理共用同一套 OSS 助手）：
     - logistics/sa007a_sales.xlsx ：SA-007A 销售发货明细（已清洗）
@@ -50,6 +50,12 @@ def load_sales():
     df = df[df["U_OldItemNo"].notna() & df["Date"].notna() & df["Qty"].notna()].copy()
     df["Qty"] = pd.to_numeric(df["Qty"], errors="coerce")
     df = df[df["Qty"].notna()]
+    # 保留品牌字段（若数据源缺失则标记为未识别）
+    if "Brand" in df.columns:
+        df["Brand"] = df["Brand"].astype(str).str.strip()
+        df.loc[df["Brand"].eq("") | df["Brand"].str.lower().eq("nan"), "Brand"] = "未识别品牌"
+    else:
+        df["Brand"] = "未识别品牌"
     # SKU 去后缀 -A/-B/-C，当作同一 SKU
     df["sku_key"] = (
         df["U_OldItemNo"].astype(str).str.strip().str.replace(r"-[ABC]$", "", regex=True)
@@ -113,8 +119,14 @@ if sales_y.empty:
 
 # ===== 侧边栏：筛选 =====
 st.sidebar.subheader("🔎 查询条件")
-# SKU 选项：来自今年数据的去重 SKU，带中文名
-opt = sales_y[["sku_key", "中文名"]].drop_duplicates("sku_key")
+
+# 品牌筛选（上游，联动 SKU / 门店）
+brands = sorted(sales_y["Brand"].dropna().unique().tolist())
+brand_sel = st.sidebar.selectbox("选择品牌", ["（全部品牌）"] + brands, index=0)
+brand_mask = sales_y["Brand"] == brand_sel if brand_sel != "（全部品牌）" else pd.Series(True, index=sales_y.index)
+
+# SKU 选项：根据已选品牌动态生成
+opt = sales_y[brand_mask][["sku_key", "中文名"]].drop_duplicates("sku_key")
 opt["label"] = opt.apply(
     lambda r: f"{r['中文名']} ｜ {r['sku_key']}" if r["中文名"] else r["sku_key"], axis=1
 )
@@ -122,17 +134,17 @@ opt = opt.sort_values("label")
 sku_options = ["（全部 SKU）"] + opt["label"].tolist()
 sku_sel = st.sidebar.selectbox("选择 SKU（中文名 / 货号）", sku_options, index=0)
 
-stores = sorted(sales_y["CustomerName"].dropna().unique().tolist())
+# 门店选项：同样受品牌筛选联动
+stores = sorted(sales_y[brand_mask]["CustomerName"].dropna().unique().tolist())
 store_sel = st.sidebar.multiselect("选择门店（可多选，留空=全部门店）", stores)
 
 # ===== 过滤视图 =====
+view = sales_y[brand_mask].copy()
 if sku_sel != "（全部 SKU）":
     sel_key = sku_sel.split("｜")[-1].strip()
-    view = sales_y[sales_y["sku_key"] == sel_key].copy()
-else:
-    view = sales_y.copy()
+    view = view[view["sku_key"] == sel_key].copy()
 if store_sel:
-    view = view[view["CustomerName"].isin(store_sel)]
+    view = view[view["CustomerName"].isin(store_sel)].copy()
 
 # 计算每笔发货的节点日期与状态
 view["_dates"] = view["Date"].apply(milestone_dates)
@@ -162,10 +174,10 @@ st.markdown("---")
 st.subheader("📋 每笔发货明细与当前状态")
 table = view.rename(columns={
     "Date": "发货日", "CustomerName": "门店", "InvoiceNo": "发票号",
-    "U_OldItemNo": "货号", "中文名": "中文名", "Qty": "数量",
+    "U_OldItemNo": "货号", "中文名": "中文名", "Brand": "品牌", "Qty": "数量",
     "当前状态": "当前状态", "进度": "进度%",
 })
-table = table[["发货日", "门店", "发票号", "货号", "中文名", "数量", "当前状态", "进度%"]]
+table = table[["发货日", "门店", "发票号", "货号", "中文名", "品牌", "数量", "当前状态", "进度%"]]
 table["发货日"] = table["发货日"].dt.strftime("%Y-%m-%d")
 st.dataframe(
     table,
@@ -178,6 +190,7 @@ st.dataframe(
         "发票号": st.column_config.TextColumn("发票号", width="small"),
         "货号":   st.column_config.TextColumn("货号",   width="medium"),
         "中文名": st.column_config.TextColumn("中文名", width="medium"),
+        "品牌":   st.column_config.TextColumn("品牌",   width="small"),
         "数量":   st.column_config.NumberColumn("数量",   width="small", format="%d"),
         "当前状态": st.column_config.TextColumn("当前状态", width="small"),
         "进度%":  st.column_config.ProgressColumn(
@@ -216,6 +229,8 @@ for _, r in view_board.iterrows():
     cn = r["中文名"] if r["中文名"] else r["U_OldItemNo"]
     store = r["CustomerName"] if pd.notna(r["CustomerName"]) else ""
     qty = r["Qty"] if pd.notna(r["Qty"]) else 0
+    bn = r["Brand"] if (pd.notna(r["Brand"]) and r["Brand"] != "未识别品牌") else ""
+    meta_line = f"{bn} ｜ {r['U_OldItemNo']} ｜ {store}" if bn else f"{r['U_OldItemNo']} ｜ {store}"
     cells = ""
     for i, (off, name) in enumerate(MILESTONES):
         d = dates[i]
@@ -230,7 +245,7 @@ for _, r in view_board.iterrows():
         '<tr>'
         f'<td class="info sticky">'
         f'<div class="cn">{cn}</div>'
-        f'<div class="meta">{r["U_OldItemNo"]} ｜ {store}</div>'
+        f'<div class="meta">{meta_line}</div>'
         f'<div class="qty">数量 {qty:,.0f} · 当前：{r["当前状态"]}</div>'
         '</td>'
         f'{cells}'
