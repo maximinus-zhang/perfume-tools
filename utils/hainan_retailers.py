@@ -12,6 +12,8 @@ data_source :
     'cooperation' = 合作方提供（内部口径）
     'estimate'    = 代理估算（无公开时序，见 hainan_estimator，禁止当实测）
 weight      : 门店在所属零售商内的相对体量代理权重（仅供估算分摊，非实测）
+opened      : 门店开业日期（公开开业史；cdf_phoenix=2014、sz_mian_sanya=2020-12 为最佳估算，
+              建议核对官方公告）
 
 ⚠️ 本文件只放「静态主数据」。动态数值（销售/客流）由
    hainan_estimator（门店级估算）与采集层填充，且门店级一律标 is_estimate=True。
@@ -49,7 +51,8 @@ RETAILERS = [
              "area": "美兰机场", "type": "机场免税店", "opened": "2019",
              "weight": 0.09, "note": "2026上半年集中开业近40间品牌店"},
             {"id": "cdf_phoenix", "name": "cdf 三亚凤凰机场免税店", "city": "三亚",
-             "area": "凤凰机场", "type": "机场免税店", "weight": 0.05,
+             "area": "凤凰机场", "type": "机场免税店", "opened": "2014",
+             "weight": 0.05,
              "note": "DIPTYQUE 等首店入驻"},
             {"id": "cdf_boao", "name": "cdf 琼海博鳌免税店", "city": "琼海",
              "area": "博鳌", "type": "离岛免税店", "opened": "2019",
@@ -89,7 +92,8 @@ RETAILERS = [
         "note": "海南发控旗下；H1 客流同比 +32%（公开新闻）",
         "stores": [
             {"id": "hk_global_haikou", "name": "海控全球精品免税城", "city": "海口",
-             "area": "日月广场", "type": "离岛免税店", "weight": 1.0,
+             "area": "日月广场", "type": "离岛免税店", "opened": "2021-01",
+             "weight": 1.0,
              "note": "与中免日月广场店同商圈竞争"},
         ],
     },
@@ -105,7 +109,8 @@ RETAILERS = [
         "note": "海南旅投旗下",
         "stores": [
             {"id": "hlt_sanya", "name": "海旅免税城", "city": "三亚",
-             "area": "解放路/河口", "type": "离岛免税店", "weight": 1.0,
+             "area": "解放路/河口", "type": "离岛免税店", "opened": "2020-12",
+             "weight": 1.0,
              "note": "市区文旅客流店"},
         ],
     },
@@ -121,7 +126,8 @@ RETAILERS = [
         "note": "国资免税集团",
         "stores": [
             {"id": "sz_mian_sanya", "name": "深免三亚国际免税店", "city": "三亚",
-             "area": "—", "type": "离岛免税店", "weight": 1.0,
+             "area": "—", "type": "离岛免税店", "opened": "2020-12",
+             "weight": 1.0,
              "note": "三亚布局"},
         ],
     },
@@ -137,7 +143,8 @@ RETAILERS = [
         "note": "中出服（中国出国人员服务）旗下",
         "stores": [
             {"id": "zhongfu_sanya", "name": "中服三亚国际免税购物公园", "city": "三亚",
-             "area": "—", "type": "离岛免税店", "weight": 1.0,
+             "area": "—", "type": "离岛免税店", "opened": "2020-12",
+             "weight": 1.0,
              "note": "购物公园业态"},
         ],
     },

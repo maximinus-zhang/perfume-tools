@@ -232,7 +232,7 @@ AIRPORT_DB = {
     },
     "海口美兰": {
         "annual_2025": 2269, "annual_2024": 2688, "rank": 17, "data_year": "2025",
-        "growth_pct": 5.1,
+        "growth_pct": -15.6,  # 修正：原值 5.1 与实际(2269 vs 2688=-15.6%)不符，源头更正
         "code_en": "HAK",
         "terminals": {
             "T1": "国内+国际",

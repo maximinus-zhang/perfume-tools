@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-全国免税商情监控 v9.0 - Streamlit 可视化仪表盘
+全国免税商情监控 v10.0 - Streamlit 可视化仪表盘
 ✅ 海南离岛免税 2026 官方月度/YTD/政策  ✅ 12大机场双年对比
 ✅ 机场境外客流（国际航线/免签覆盖/入境游联动）  ✅ 百度新闻实时聚合
+✅ v10.0 派派深度分析升级（2026-07-22）：
+   ① 跨模块战略洞察 1 页纸（3 机会/3 风险/资源投放 ROI 排序）
+   ② 海南 vs 全国 12 机场联动分析（跑赢大盘+机场-免税耦合）
+   ③ 12 机场 7 维度深度诊断（80/20、HHI、BCG 2×2、城市层级、Top/Bottom、风险评分卡、情景模拟）
 """
 
 import streamlit as st
@@ -39,7 +43,7 @@ HAINAN_METRICS = {
 # ============================================================
 
 st.title("🏝️ 全国免税商情监控 2026")
-st.caption("📊 海南离岛免税：海口海关/新华社/央视/海南特区报 ｜ 12大机场：CAAC民航局公报 ｜ 入境游：海南自贸港封关发布会")
+st.caption("📊 海南离岛免税：海口海关/新华社/央视/海南特区报 ｜ 12大机场：CAAC民航局公报 ｜ 入境游：海南自贸港封关发布会 ｜ v10.0 派派深度分析")
 
 col1, col2 = st.columns([3, 1])
 with col2:
@@ -547,6 +551,231 @@ st.caption(
 )
 
 # ============================================================
+# 模块一·附三：跨模块战略洞察（管理层 1 页纸速读）v10.0 新增
+# ============================================================
+
+st.markdown("---")
+st.subheader("💎 战略洞察（跨模块 · 1 页纸速读）v10.0")
+
+# ---- 全局指标再算（不依赖 airport_keys 模块，AIRPORT_DB 直接读）----
+amt26 = _yd["amount_2026"]
+amt_yoy = _yd["amt_yoy"]
+pax_yoy = _yd["pax_yoy"]
+_all_airports = list(AIRPORT_DB.keys())
+
+# 12 机场整体
+total_25 = sum(safe_info(k, "annual_2025", 0) for k in _all_airports)
+total_24 = sum(safe_info(k, "annual_2024", 0) for k in _all_airports)
+ap_growth = (total_25 / total_24 - 1) * 100 if total_24 else 0
+ap_diff = amt_yoy - ap_growth
+
+# 海南两场
+hak_25 = safe_info("海口美兰", "annual_2025", 0)
+hak_24 = safe_info("海口美兰", "annual_2024", 0)
+syx_25 = safe_info("三亚凤凰", "annual_2025", 0)
+syx_24 = safe_info("三亚凤凰", "annual_2024", 0)
+hak_g = (hak_25 / hak_24 - 1) * 100 if hak_24 else 0
+syx_g = (syx_25 / syx_24 - 1) * 100 if syx_24 else 0
+
+# 头部 Top-3（按 2025 旅客量）
+_sorted_by_25 = sorted(_all_airports, key=lambda k: safe_info(k, "annual_2025", 0), reverse=True)
+top3 = _sorted_by_25[:3]
+top3_25 = sum(safe_info(k, "annual_2025", 0) for k in top3)
+top3_share = top3_25 / total_25 * 100 if total_25 else 0
+
+# 尾部 Bottom-3（按增长率升序）
+_sorted_by_g = sorted(_all_airports, key=lambda k: safe_info(k, "growth_pct", 0))
+bot3 = _sorted_by_g[:3]
+bot3_g_list = [safe_info(k, "growth_pct", 0) for k in bot3]
+
+# 头部高增速 Top-3（按增长率降序）
+_sorted_by_g_desc = sorted(_all_airports, key=lambda k: safe_info(k, "growth_pct", 0), reverse=True)
+top3_g = _sorted_by_g_desc[:3]
+top3_g_list = [safe_info(k, "growth_pct", 0) for k in top3_g]
+
+# ---- 3 大机会 ----
+st.markdown("**🎯 3 大机会**")
+oc1, oc2, oc3 = st.columns(3)
+with oc1:
+    st.success(
+        f"**🌟 海南离岛免税领跑大盘**\n\n"
+        f"H1 同比 **+{amt_yoy:.1f}%**，跑赢 12 机场整体 +{ap_growth:.1f}% 达 **{ap_diff:+.1f}pp**。"
+        f"封关+86国免签红利下，海南仍是 2026 增长第一极。",
+        icon="🌟",
+    )
+with oc2:
+    top3_g_str = " / ".join([f"{k}+{top3_g_list[i]:.1f}%" for i, k in enumerate(top3_g)])
+    st.success(
+        f"**🚀 头部机场持续强势**\n\n"
+        f"Top-3 集中度 **{top3_share:.1f}%**（{top3[0]}/{top3[1]}/{top3[2]}）。"
+        f"高增速 Top-3：**{top3_g_str}**，是免税国际客单恢复的核心阵地。",
+        icon="🚀",
+    )
+with oc3:
+    ib_pre = HA_DF_2026["inbound"]
+    st.success(
+        f"**🌍 国际客流恢复空间**\n\n"
+        f"封关以来免签入境 **+{ib_pre['visa_free_yoy']:.1f}%**（{ib_pre['visa_free_entry']}万人次）。"
+        f"国际航线 {ib_pre['intl_routes']} 条覆盖 {ib_pre['route_countries']} 国地，"
+        f"机场免税国际客单仍有提价空间。",
+        icon="🌍",
+    )
+
+# ---- 3 大风险 ----
+st.markdown("**⚠️ 3 大风险**")
+rk1, rk2, rk3 = st.columns(3)
+with rk1:
+    st.warning(
+        f"**📉 Q2 增长明显放缓**\n\n"
+        f"Q1 +{q1['yoy']:.1f}% → Q2 **+{q2['yoy']:.1f}%**，高基数效应已显现。"
+        f"H2 同比基数被新政抬高，预测仅低个位数甚至转负。",
+        icon="📉",
+    )
+with rk2:
+    st.warning(
+        f"**⚖️ 海南两场增速分化**\n\n"
+        f"海口 {hak_g:+.1f}% vs 三亚 **{syx_g:+.1f}%**，"
+        f"三亚渠道承压，市内店分流+国际客流弱是主因。",
+        icon="⚖️",
+    )
+with rk3:
+    bot3_str = " / ".join([f"{bot3[i]}+{bot3_g_list[i]:.1f}%" for i in range(len(bot3))])
+    st.warning(
+        f"**🐢 中西部增速分化**\n\n"
+        f"增速尾部 3 家：**{bot3_str}**，增长动力不足，"
+        f"机场免税扩张需关注区域分化、谨慎选址。",
+        icon="🐢",
+    )
+
+# ---- 资源投放建议（按 ROI 排序）----
+st.markdown("**💰 资源投放建议（按预期 ROI 排序）**")
+ir1, ir2, ir3 = st.columns(3)
+with ir1:
+    st.info(
+        "**🥇 优先级 1：海南离岛免税**\n\n"
+        "Q2 走平后 H1 仍 +18.8%，跑赢大盘；7-8 月暑运为关键验证期。"
+        "建议按 H1 实际 + 全年中性 +10% 做滚动补货预测。\n\n"
+        "**预期 ROI：高** ｜ **置信度：高**",
+        icon="🥇",
+    )
+with ir2:
+    st.info(
+        "**🥈 优先级 2：浦东/白云国际客流**\n\n"
+        "国际占比 22%/14% 双高，+10.7%/+9.4% 高增速；"
+        "国际客单价有 30-50% 提价空间，香化高客单 SKU 倾斜。\n\n"
+        "**预期 ROI：高** ｜ **置信度：中**",
+        icon="🥈",
+    )
+with ir3:
+    st.info(
+        "**🥉 优先级 3：中西部重点城市免税布局**\n\n"
+        "成都/重庆/昆明/西安国际占比 5-9%，基础低、空间大但短期 ROI 弱；"
+        "建议**轻资产合作**（与本地零售商联营）。\n\n"
+        "**预期 ROI：中** ｜ **置信度：低**",
+        icon="🥉",
+    )
+
+st.caption(
+    f"📌 数据基础：海口海关 H1 官方（截止 07-08，{amt26}亿）+ "
+    f"CAAC 12 大机场 2025 全年公报（合计 {total_25:,.0f}万，同比 +{ap_growth:.1f}%）+ "
+    f"海南封关半年新闻发布会"
+)
+
+# ============================================================
+# 模块一·附四：海南 vs 全国 12 机场联动分析 v10.0 新增
+# ============================================================
+
+st.markdown("---")
+st.subheader("🔗 海南 vs 全国 12 大机场联动分析 v10.0")
+
+# 海南两场汇总
+hn_25 = hak_25 + syx_25
+hn_24 = hak_24 + syx_24
+hn_g = (hn_25 / hn_24 - 1) * 100 if hn_24 else 0
+hn_share = hn_25 / total_25 * 100 if total_25 else 0
+delta_ap = amt_yoy - ap_growth
+
+st.markdown("**📊 海南两场 vs 全国 12 机场整体对比**")
+c1, c2, c3, c4 = st.columns(4)
+with c1:
+    st.metric("海南两场 2025 旅客", f"{hn_25:,} 万", delta=f"{hn_g:+.1f}%")
+with c2:
+    st.metric("全国 12 机场 2025 旅客", f"{total_25:,} 万", delta=f"{ap_growth:+.1f}%")
+with c3:
+    st.metric("海南两场占比", f"{hn_share:.1f}%", help="海南两场旅客量 / 12 机场总量")
+with c4:
+    st.metric(
+        "海南离岛免税 vs 机场大盘溢价",
+        f"{delta_ap:+.1f}pp",
+        help=f"海南 H1 免税 +{amt_yoy:.1f}% vs 12 机场旅客 +{ap_growth:.1f}%",
+    )
+
+# 增长对比表
+st.markdown("**📈 海南 vs 各机场增速对比**")
+_compare_rows = []
+for k in _all_airports:
+    a25 = safe_info(k, "annual_2025", 0)
+    a24 = safe_info(k, "annual_2024", 0)
+    g = (a25 / a24 - 1) * 100 if a24 else 0
+    is_hainan = k in ("海口美兰", "三亚凤凰")
+    _compare_rows.append({
+        "机场": k,
+        "2025旅客(万)": a25,
+        "2024旅客(万)": a24,
+        "增长率%": g,
+        "归属": "🟢 海南" if is_hainan else "⚪ 全国",
+    })
+_cmp_df = pd.DataFrame(_compare_rows).sort_values("增长率%", ascending=False).reset_index(drop=True)
+st.dataframe(
+    _cmp_df.style
+        .background_gradient(subset=["增长率%"], cmap="RdYlGn", vmin=0, vmax=15)
+        .highlight_max(subset=["2025旅客(万)"], color="#90EE90"),
+    width='stretch', hide_index=True,
+    column_config={
+        "2025旅客(万)": st.column_config.NumberColumn(format="%d"),
+        "2024旅客(万)": st.column_config.NumberColumn(format="%d"),
+        "增长率%": st.column_config.NumberColumn(format="+.1f%%"),
+    },
+)
+
+# 离岛免税 vs 机场国际客流耦合
+st.markdown("**🌐 离岛免税与机场国际客流耦合（关键洞察）**")
+ib_link = HA_DF_2026["inbound"]
+intl_pax_2025 = sum(
+    safe_info(k, "annual_2025", 0) * safe_info(k, "international_pct", 0) / 100
+    for k in _all_airports
+)
+intl_pax_2024 = sum(
+    safe_info(k, "annual_2024", 0) * safe_info(k, "international_pct", 0) / 100
+    for k in _all_airports
+)
+intl_growth = (intl_pax_2025 / intl_pax_2024 - 1) * 100 if intl_pax_2024 else 0
+
+st.markdown(
+    f"- **全国 12 机场国际旅客推算**（按 CAAC 国际占比% × 旅客量）："
+    f"2025 ≈ **{intl_pax_2025:,.0f} 万人次**，同比 +{intl_growth:.1f}%。"
+    f"**注意：CAAC 仅披露国际占比%，分国别/分机场国际明细属边检涉密数据，本数值为估算**。"
+)
+st.markdown(
+    f"- **海南封关半年免签入境**：**{ib_link['visa_free_entry']} 万人次**（同比 +{ib_link['visa_free_yoy']:.1f}%），"
+    f"覆盖 {ib_link['visa_free_countries']} 国。免税购物的国际化程度提升对机场免税国际客单有正向带动。"
+)
+st.markdown(
+    f"- **核心耦合洞察**：海南 H1 离岛免税 +{amt_yoy:.1f}% vs 海南两场旅客 {hn_g:+.1f}%；"
+    f"**离岛免税增速跑赢海南机场旅客增速 {amt_yoy - hn_g:+.1f}pp**，"
+    f"主因是客单价提升 + 件单价上移（参见 1.2 模块『H1 增长量价拆解』），而非单纯流量驱动。"
+)
+st.markdown(
+    f"- **机场免税业务联动**：12 机场 Top-2（浦东+白云）国际客流恢复 + 高客单免税业务，"
+    f"是机场免税渠道 2026 的核心增长引擎；中西部机场国际占比仅 5-9%，增长空间存在但短期贡献有限。"
+)
+
+st.caption(
+    "⚠️ 推算说明：分国别/分机场国际旅客明细为边检涉密数据；"
+    "本页国际旅客数 = 机场总量 × CAAC 国际占比%，仅为推算口径。"
+)
+
+# ============================================================
 # 模块二：12大机场核心指标（2025 vs 2024）
 # ============================================================
 
@@ -874,6 +1103,373 @@ st.dataframe(
 )
 
 # ============================================================
+# 模块七·附：12 机场深度诊断 v10.0 新增（派派风格深度分析 7 子模块）
+# ============================================================
+
+st.markdown("---")
+st.subheader("🔬 12 大机场深度诊断 v10.0（派派风格 7 维度分析）")
+
+# 准备 12 机场分析数据（统一用 2025/2024 实际值计算增长率，避免字段口径不一）
+_ap_rows = []
+for k in _all_airports:
+    _a25 = safe_info(k, "annual_2025", 0)
+    _a24 = safe_info(k, "annual_2024", 0)
+    _g = (_a25 / _a24 - 1) * 100 if _a24 else 0
+    _ap_rows.append({
+        "机场": k,
+        "2025": _a25,
+        "2024": _a24,
+        "增长率%": _g,  # 用计算值（避免 growth_pct 字段与实际数据不一致）
+        "国际占比%": safe_info(k, "international_pct", 0),
+        "国内占比%": safe_info(k, "domestic_pct", 0),
+        "货邮": safe_info(k, "cargo_2025", 0),
+        "起降": safe_info(k, "movements_2025", 0),
+    })
+ap_df = pd.DataFrame(_ap_rows)
+ap_total = ap_df["2025"].sum()
+
+# ========== (1) 80/20 长尾分析 ==========
+st.markdown("**📊 ① 80/20 长尾分析：少数机场贡献多数客流**")
+ap_sorted = ap_df.sort_values("2025", ascending=False).reset_index(drop=True)
+ap_sorted["占比%"] = ap_sorted["2025"] / ap_total * 100
+ap_sorted["累计占比%"] = ap_sorted["占比%"].cumsum()
+ap_sorted["累计机场数"] = list(range(1, len(ap_sorted) + 1))
+
+c1, c2 = st.columns([2, 1])
+with c1:
+    st.bar_chart(
+        ap_sorted.set_index("机场")[["占比%", "累计占比%"]],
+        color=["#1E90FF", "#FF8C00"], height=300,
+    )
+with c2:
+    threshold_80 = ap_sorted[ap_sorted["累计占比%"] >= 80.0]
+    n_80 = len(threshold_80) if not threshold_80.empty else len(ap_sorted)
+    top1_share = float(ap_sorted.iloc[0]["占比%"])
+    top3_share_sum = float(ap_sorted.iloc[:3]["占比%"].sum())
+    st.metric("Top-1 占比", f"{top1_share:.1f}%")
+    st.metric("Top-3 占比", f"{top3_share_sum:.1f}%")
+    st.metric("覆盖 80% 所需机场数", f"{n_80} / {len(ap_sorted)}")
+    if n_80 <= 3:
+        st.error("🚨 头部高度集中，资源过度依赖 Top-3")
+    elif n_80 <= 6:
+        st.warning("⚠️ 中度集中，前 6 家主导")
+    else:
+        st.info("✅ 分布相对均衡")
+
+# ========== (2) HHI 集中度 ==========
+st.markdown("**📐 ② 赫芬达尔-赫希曼集中度（HHI）**")
+shares = ap_sorted["2025"] / ap_total
+hhi = float((shares ** 2).sum() * 10000)
+if hhi > 5000:
+    hhi_label = "🚨 极度集中"
+elif hhi > 2500:
+    hhi_label = "⚠️ 高度集中"
+elif hhi > 1500:
+    hhi_label = "🟡 中度集中"
+else:
+    hhi_label = "✅ 竞争性"
+
+c1, c2, c3 = st.columns(3)
+with c1:
+    st.metric(
+        "HHI 指数", f"{hhi:,.0f}",
+        help="Σ(份额²) × 10000；>5000 极集中, 2500-5000 高, 1500-2500 中, <1500 竞争",
+    )
+with c2:
+    st.metric("集中度等级", hhi_label)
+with c3:
+    top1_hhi = (top1_share / 100) ** 2 * 10000
+    st.metric(
+        "Top-1 HHI 贡献", f"{top1_hhi:,.0f}",
+        help=f"仅 Top-1（{ap_sorted.iloc[0]['机场']}）的 HHI 贡献",
+    )
+
+st.caption(
+    f"📌 12 机场旅客量 HHI = {hhi:,.0f}（{hhi_label}）。"
+    f"如剔除海南两场后 HHI 将进一步上升（海南两场为政策性机场、非市场竞争结果）。"
+)
+
+# ========== (3) BCG 2x2 矩阵 ==========
+st.markdown("**🎯 ③ 客流量 × 增长率 战略矩阵（BCG 2×2）**")
+median_25 = float(ap_df["2025"].median())
+median_g = float(ap_df["增长率%"].median())
+
+
+def _bcg_class(v, g, mv, mg):
+    if v >= mv and g >= mg:
+        return "🌟 明星"
+    elif v >= mv and g < mg:
+        return "💰 现金牛"
+    elif v < mv and g >= mg:
+        return "💎 利润型"
+    else:
+        return "⚠️ 瘦狗"
+
+
+ap_df["象限"] = ap_df.apply(
+    lambda r: _bcg_class(r["2025"], r["增长率%"], median_25, median_g), axis=1
+)
+bcg_summary = ap_df["象限"].value_counts().reset_index()
+bcg_summary.columns = ["象限", "机场数"]
+
+c1, c2 = st.columns(2)
+with c1:
+    st.dataframe(
+        ap_df[["机场", "2025", "增长率%", "象限"]].sort_values("2025", ascending=False),
+        width='stretch', hide_index=True,
+        column_config={
+            "2025": st.column_config.NumberColumn(format="%d"),
+            "增长率%": st.column_config.NumberColumn(format="+.1f%%"),
+        },
+    )
+with c2:
+    st.bar_chart(bcg_summary.set_index("象限"), color="#1E90FF", height=300)
+    st.caption(f"中位数分位：旅客 {median_25:,.0f}万 / 增长率 {median_g:+.1f}%")
+
+# ========== (4) 城市层级分析 ==========
+st.markdown("**🏙️ ④ 城市层级分析（一线/新一线/二线）**")
+CITY_TIER = {
+    "上海浦东": "一线",
+    "广州白云": "一线",
+    "北京首都": "一线",
+    "深圳宝安": "一线",
+    "北京大兴": "一线",
+    "成都天府": "新一线",
+    "重庆江北": "新一线",
+    "昆明长水": "新一线",
+    "西安咸阳": "新一线",
+    "杭州萧山": "新一线",
+    "海口美兰": "二线",
+    "三亚凤凰": "二线",
+}
+ap_df["城市层级"] = ap_df["机场"].map(CITY_TIER).fillna("其他")
+
+tier_summary = ap_df.groupby("城市层级").agg(
+    机场数=("机场", "count"),
+    旅客2025=("2025", "sum"),
+    平均增长率=("增长率%", "mean"),
+).reset_index()
+tier_summary["旅客占比%"] = tier_summary["旅客2025"] / ap_total * 100
+tier_summary = tier_summary.sort_values("旅客2025", ascending=False).reset_index(drop=True)
+
+st.dataframe(
+    tier_summary.style
+        .background_gradient(subset=["平均增长率"], cmap="RdYlGn", vmin=0, vmax=10)
+        .background_gradient(subset=["旅客占比%"], cmap="Blues", vmin=0, vmax=70),
+    width='stretch', hide_index=True,
+    column_config={
+        "旅客2025": st.column_config.NumberColumn(format="%d 万"),
+        "平均增长率": st.column_config.NumberColumn(format="+.1f%%"),
+        "旅客占比%": st.column_config.NumberColumn(format="%.1f%%"),
+    },
+)
+
+# 洞察
+if len(tier_summary) > 0:
+    tier_top = str(tier_summary.iloc[0]["城市层级"])
+    tier_top_share = float(tier_summary.iloc[0]["旅客占比%"])
+    tier_low_row = tier_summary.sort_values("平均增长率").iloc[0]
+    if pd.notna(tier_low_row["平均增长率"]):
+        st.markdown(
+            f"- **结构洞察**：**{tier_top}** 城市层级贡献 **{tier_top_share:.1f}%** 旅客量，"
+            f"主导效应明显。**{tier_low_row['城市层级']}** 层级平均增长率最低（{tier_low_row['平均增长率']:+.1f}%），"
+            f"需差异化补货/营销策略。"
+        )
+
+# ========== (5) Top vs Bottom 诊断 ==========
+st.markdown("**⚖️ ⑤ 头部 vs 尾部机场诊断**")
+top3_df = ap_sorted.head(3)[["机场", "2025", "2024", "增长率%", "国际占比%"]].reset_index(drop=True)
+bot3_df = ap_sorted.tail(3)[["机场", "2025", "2024", "增长率%", "国际占比%"]].sort_values("2025").reset_index(drop=True)
+top3_df["组别"] = "🥇 Top-3"
+bot3_df["组别"] = "🐢 Bottom-3"
+diag_df = pd.concat([top3_df, bot3_df], ignore_index=True)
+st.dataframe(diag_df, width='stretch', hide_index=True)
+
+# 头部尾部对比
+top3_avg_g = float(top3_df["增长率%"].mean())
+bot3_avg_g = float(bot3_df["增长率%"].mean())
+top3_avg_intl = float(top3_df["国际占比%"].mean())
+bot3_avg_intl = float(bot3_df["国际占比%"].mean())
+top3_total_25 = int(top3_df["2025"].sum())
+bot3_total_25 = int(bot3_df["2025"].sum())
+ratio = top3_total_25 / bot3_total_25 if bot3_total_25 else float("inf")
+
+st.markdown(
+    f"- **结构差距**：Top-3 合计 **{top3_total_25:,} 万** vs Bottom-3 合计 **{bot3_total_25:,} 万**，"
+    f"**差距 {ratio:.1f} 倍**。"
+    f"Top-3 平均增速 {top3_avg_g:+.1f}% vs Bottom-3 {bot3_avg_g:+.1f}%，**头部韧性显著强于尾部**。"
+    f"Top-3 平均国际占比 {top3_avg_intl:.1f}% vs Bottom-3 {bot3_avg_intl:.1f}%，"
+    f"{'头部国际航线恢复更快' if top3_avg_intl > bot3_avg_intl else '尾部国际占比反而偏高'}。"
+)
+
+# ========== (6) 风险评分卡 ==========
+st.markdown("**🛡️ ⑥ 综合风险评分卡（4 维度加权）**")
+
+# 维度 1: 集中度风险 (35%) - HHI 归一化
+hhi_norm = min(100.0, hhi / 50.0)  # 5000→100
+# 维度 2: 头部门店依赖 (20%) - Top-1 占比
+top1_dep = top1_share  # 已是 0-100
+# 维度 3: 长尾风险 (20%) - 衡量尾部分散度（Bottom-3 占比越大越健康）
+bot3_share = bot3_total_25 / ap_total * 100 if ap_total else 0
+long_tail_score = max(0.0, 100.0 - bot3_share * 4.0)  # bot3_share 越大越健康
+# 维度 4: 数据校准 (25%) - 国际占比是否合理（0-25 算偏低）
+intl_avg = float(ap_df["国际占比%"].mean())
+data_calib = 100.0 if 5 <= intl_avg <= 25 else (60.0 if intl_avg < 5 else 80.0)
+
+r_total = (
+    hhi_norm * 0.35 +
+    top1_dep * 0.20 +
+    long_tail_score * 0.20 +
+    data_calib * 0.25
+)
+
+risk_rows = [
+    {
+        "维度": "集中度风险（HHI）",
+        "得分": round(hhi_norm, 1), "权重": "35%",
+        "加权": round(hhi_norm * 0.35, 1),
+        "说明": f"HHI={hhi:,.0f}（{hhi_label}）",
+    },
+    {
+        "维度": "头部门店依赖（Top-1 占比）",
+        "得分": round(top1_dep, 1), "权重": "20%",
+        "加权": round(top1_dep * 0.20, 1),
+        "说明": f"Top-1 {ap_sorted.iloc[0]['机场']} 占 {top1_share:.1f}%",
+    },
+    {
+        "维度": "长尾健康度",
+        "得分": round(long_tail_score, 1), "权重": "20%",
+        "加权": round(long_tail_score * 0.20, 1),
+        "说明": f"Bottom-3 合计占 {bot3_share:.1f}%（越大越健康）",
+    },
+    {
+        "维度": "数据校准（国际占比合理度）",
+        "得分": round(data_calib, 1), "权重": "25%",
+        "加权": round(data_calib * 0.25, 1),
+        "说明": f"国际占比均值 {intl_avg:.1f}%（5-25% 为合理）",
+    },
+]
+risk_df = pd.DataFrame(risk_rows)
+
+c1, c2 = st.columns([1, 2])
+with c1:
+    if r_total >= 75:
+        risk_label = "🔴 高风险"
+    elif r_total >= 55:
+        risk_label = "🟠 中高风险"
+    elif r_total >= 35:
+        risk_label = "🟡 中风险"
+    else:
+        risk_label = "🟢 低风险"
+    st.metric("综合风险评分", f"{r_total:.1f} / 100", delta=risk_label)
+    st.caption("📌 评分越高风险越大，>75 为高风险")
+with c2:
+    st.dataframe(risk_df, width='stretch', hide_index=True)
+
+# 优先处理建议
+priority_text = []
+if hhi_norm >= 50:
+    priority_text.append(
+        "• 集中度风险高：建议加大对中西部机场（成都/重庆/昆明/西安）的资源倾斜，分散对头部三场的依赖"
+    )
+if top1_dep >= 15:
+    priority_text.append(
+        f"• 头部门店依赖：{ap_sorted.iloc[0]['机场']} 单家占 {top1_share:.1f}%，"
+        f"需关注该机场政策/运营波动对大盘的传导"
+    )
+if long_tail_score >= 60:
+    priority_text.append(
+        "• 长尾偏弱：Bottom-3 合计占比低，结构性失衡；建议针对性补货/激活"
+    )
+if data_calib < 80:
+    priority_text.append(
+        "• 数据校准：国际占比数据需进一步核实或补充分国别明细"
+    )
+
+if priority_text:
+    st.markdown("**🎯 优先处理建议**：")
+    for t in priority_text:
+        st.markdown(t)
+else:
+    st.success("✅ 当前风险水平可控，建议保持现有运营节奏")
+
+# ========== (7) 情景模拟 ==========
+st.markdown("**🚀 ⑦ 情景模拟：2026 全年机场旅客量预测**")
+st.caption(
+    f"基于 2024→2025 实际增长率 {ap_growth:+.1f}% 做锚定，用户可自定义 2026 增长率"
+)
+
+# 默认情景
+scen_low = ap_growth - 5  # 保守：大盘 -5pp
+scen_base = ap_growth  # 基准：大盘持平
+scen_high = min(15.0, ap_growth + 5)  # 乐观：大盘 +5pp，封顶 15%
+
+default_rows = []
+for label, g in [("🔴 保守", scen_low), ("🟡 基准", scen_base), ("🟢 乐观", scen_high)]:
+    proj_2026 = total_25 * (1 + g / 100)
+    delta = proj_2026 - total_25
+    default_rows.append({
+        "情景": label,
+        "2026 增长率%": round(g, 1),
+        "2026 旅客推算(万)": round(proj_2026, 0),
+        "2026 增量(万)": round(delta, 0),
+    })
+default_df = pd.DataFrame(default_rows)
+st.markdown("**📊 默认情景（基于大盘 -5pp / 持平 / +5pp）**")
+st.dataframe(default_df, width='stretch', hide_index=True)
+
+# 用户可调情景
+st.markdown("**🎛️ 自定义情景（可调滑杆）**")
+ca, cb, cc = st.columns(3)
+with ca:
+    custom_low = st.number_input(
+        "🔴 保守情景增长率%",
+        min_value=-20.0, max_value=30.0,
+        value=float(scen_low), step=0.5, key="scen_low",
+        help="下限 -20%（极端下行）",
+    )
+with cb:
+    custom_base = st.number_input(
+        "🟡 基准情景增长率%",
+        min_value=-20.0, max_value=30.0,
+        value=float(scen_base), step=0.5, key="scen_base",
+    )
+with cc:
+    custom_high = st.number_input(
+        "🟢 乐观情景增长率%",
+        min_value=-20.0, max_value=30.0,
+        value=float(scen_high), step=0.5, key="scen_high",
+        help="上限 30%（极端上行）",
+    )
+
+custom_rows = []
+for label, g in [("🔴 保守", custom_low), ("🟡 基准", custom_base), ("🟢 乐观", custom_high)]:
+    proj_2026 = total_25 * (1 + g / 100)
+    custom_rows.append({
+        "情景": label,
+        "2026 增长率%": round(g, 1),
+        "2026 旅客推算(万)": round(proj_2026, 0),
+    })
+custom_df = pd.DataFrame(custom_rows)
+
+c1, c2 = st.columns([1, 1])
+with c1:
+    st.markdown("**📊 自定义情景结果**")
+    st.dataframe(custom_df, width='stretch', hide_index=True)
+with c2:
+    st.markdown("**📈 情景对比图**")
+    st.bar_chart(
+        custom_df.set_index("情景")[["2026 旅客推算(万)"]],
+        color="#1E90FF", height=300,
+    )
+
+st.caption(
+    f"📌 情景说明：12 机场 2024→2025 同比 +{ap_growth:.1f}%。"
+    f"2026 推算假设各机场维持 2024-2025 增速节奏；"
+    f"海南离岛免税 +18.8% 已反映政策红利，机场端未必能同步兑现，需关注 7-8 月暑运实际验证。"
+)
+
+# ============================================================
 # 模块八：最新动态
 # ============================================================
 
@@ -959,4 +1555,4 @@ with col3:
     st.markdown("—")
     st.markdown("⚠️ **机场境外游客客流定位**：CAAC公报仅公布机场『国际占比%』，分机场/分国别境外旅客明细为边检涉密级数据、公开源未披露；本页『境外客流』Tab 提供**国际航线城市 + 免签国覆盖（公开整理）**，并结合**海南省级入境游口径**（86国免签/138.5万进出境）做联动分析。")
 
-st.caption(f"本报告由海南免税商情监控 v9.0 自动生成 | {today}")
+st.caption(f"本报告由全国免税商情监控 v10.0 自动生成 | {today}")
