@@ -729,12 +729,12 @@ _cmp_df = pd.DataFrame(_compare_rows).sort_values("增长率%", ascending=False)
 st.dataframe(
     _cmp_df.style
         .background_gradient(subset=["增长率%"], cmap="RdYlGn", vmin=0, vmax=15)
-        .highlight_max(subset=["2025旅客(万)"], color="#90EE90"),
+        .highlight_max(subset=["2025旅客(万)"], color="#90EE90")
+        .format({"增长率%": "{:+.1f}%"}),
     width='stretch', hide_index=True,
     column_config={
         "2025旅客(万)": st.column_config.NumberColumn(format="%d"),
         "2024旅客(万)": st.column_config.NumberColumn(format="%d"),
-        "增长率%": st.column_config.NumberColumn(format="+.1f%%"),
     },
 )
 
@@ -842,18 +842,17 @@ st.bar_chart(chart_data, x="机场", y=["2025", "2024"],
 st.caption("**数据明细表**（单位：万人次）")
 
 growth_df = chart_data[["机场", "2025", "2024", "增量", "增长率(%)"]].copy()
-growth_df["增长率"] = growth_df["增长率(%)"].apply(lambda x: f"+{x}%" if x > 0 else f"{x}%")
 st.dataframe(
     growth_df.style
         .highlight_max(subset=["增长率(%)"], color="#90EE90")
-        .highlight_min(subset=["增长率(%)"], color="#FFB3B3"),
+        .highlight_min(subset=["增长率(%)"], color="#FFB3B3")
+        .format({"增长率(%)": "{:+.1f}%"}),
     width='stretch', hide_index=True,
     column_config={
         "2025": st.column_config.NumberColumn("2025年", format="%.0f", width="small"),
         "2024": st.column_config.NumberColumn("2024年", format="%.0f", width="small"),
         "增量": st.column_config.NumberColumn("增量(万)", format="+%.0f", width="small"),
-        "增长率(%)": st.column_config.NumberColumn("增长率", format="%.1f%%", width="small"),
-        "增长率": st.column_config.NumberColumn("增长", width="small"),
+        "增长率(%)": st.column_config.NumberColumn("增长率", width="small"),
     }
 )
 
@@ -1092,13 +1091,13 @@ compare_df = pd.DataFrame(compare_data)
 st.dataframe(
     compare_df.style
         .highlight_max(subset=["2025(万)", "增长(%)"], color="#90EE90")
-        .highlight_min(subset=["增长(%)"], color="#FFB3B3"),
+        .highlight_min(subset=["增长(%)"], color="#FFB3B3")
+        .format({"增长(%)": "{:+.1f}%"}),
     width='stretch', hide_index=True,
     column_config={
         "2025(万)": st.column_config.NumberColumn(format="%.0f"),
         "2024(万)": st.column_config.NumberColumn(format="%.0f"),
         "增量(万)": st.column_config.NumberColumn(format="+%.0f"),
-        "增长(%)": st.column_config.NumberColumn(format="+.1f%%"),
     }
 )
 
@@ -1215,11 +1214,12 @@ bcg_summary.columns = ["象限", "机场数"]
 c1, c2 = st.columns(2)
 with c1:
     st.dataframe(
-        ap_df[["机场", "2025", "增长率%", "象限"]].sort_values("2025", ascending=False),
+        ap_df[["机场", "2025", "增长率%", "象限"]]
+            .sort_values("2025", ascending=False)
+            .style.format({"增长率%": "{:+.1f}%"}),
         width='stretch', hide_index=True,
         column_config={
             "2025": st.column_config.NumberColumn(format="%d"),
-            "增长率%": st.column_config.NumberColumn(format="+.1f%%"),
         },
     )
 with c2:
@@ -1255,12 +1255,11 @@ tier_summary = tier_summary.sort_values("旅客2025", ascending=False).reset_ind
 st.dataframe(
     tier_summary.style
         .background_gradient(subset=["平均增长率"], cmap="RdYlGn", vmin=0, vmax=10)
-        .background_gradient(subset=["旅客占比%"], cmap="Blues", vmin=0, vmax=70),
+        .background_gradient(subset=["旅客占比%"], cmap="Blues", vmin=0, vmax=70)
+        .format({"平均增长率": "{:+.1f}%", "旅客占比%": "{:.1f}%"}),
     width='stretch', hide_index=True,
     column_config={
         "旅客2025": st.column_config.NumberColumn(format="%d 万"),
-        "平均增长率": st.column_config.NumberColumn(format="+.1f%%"),
-        "旅客占比%": st.column_config.NumberColumn(format="%.1f%%"),
     },
 )
 
@@ -1283,7 +1282,7 @@ bot3_df = ap_sorted.tail(3)[["机场", "2025", "2024", "增长率%", "国际占�
 top3_df["组别"] = "🥇 Top-3"
 bot3_df["组别"] = "🐢 Bottom-3"
 diag_df = pd.concat([top3_df, bot3_df], ignore_index=True)
-st.dataframe(diag_df, width='stretch', hide_index=True)
+st.dataframe(diag_df.style.format({"增长率%": "{:+.1f}%"}), width='stretch', hide_index=True)
 
 # 头部尾部对比
 top3_avg_g = float(top3_df["增长率%"].mean())
@@ -1416,7 +1415,7 @@ for label, g in [("🔴 保守", scen_low), ("🟡 基准", scen_base), ("🟢 �
     })
 default_df = pd.DataFrame(default_rows)
 st.markdown("**📊 默认情景（基于大盘 -5pp / 持平 / +5pp）**")
-st.dataframe(default_df, width='stretch', hide_index=True)
+st.dataframe(default_df.style.format({"2026 增长率%": "{:+.1f}%"}), width='stretch', hide_index=True)
 
 # 用户可调情景
 st.markdown("**🎛️ 自定义情景（可调滑杆）**")
@@ -1455,7 +1454,7 @@ custom_df = pd.DataFrame(custom_rows)
 c1, c2 = st.columns([1, 1])
 with c1:
     st.markdown("**📊 自定义情景结果**")
-    st.dataframe(custom_df, width='stretch', hide_index=True)
+    st.dataframe(custom_df.style.format({"2026 增长率%": "{:+.1f}%"}), width='stretch', hide_index=True)
 with c2:
     st.markdown("**📈 情景对比图**")
     st.bar_chart(
