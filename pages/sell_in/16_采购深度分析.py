@@ -318,7 +318,7 @@ with tab3:
             "YTD开票": "{:,.0f}", "YTD PO": "{:,.0f}", "2025 BE": "{:,.0f}", "2026预测": "{:,.0f}",
             "开票率": "{:.1%}", "开票达成": "{:.1%}", "PO达成": "{:.1%}",
         }).background_gradient(subset=["开票率"], cmap="RdYlGn")
-        .background_gradient(subset=["AchInv"], cmap="RdYlGn"),
+        .background_gradient(subset=["开票达成"], cmap="RdYlGn"),
         use_container_width=True,
         column_config={
             "开票率": st.column_config.NumberColumn("开票率", format="%.1%"),
