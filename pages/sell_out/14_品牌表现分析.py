@@ -18,7 +18,7 @@
   - database 仅 7 个品牌、2019–2020，作为「历史市场结构」补充视角
 
 用法: 本文件由 Streamlit 多页 app 自动加载（见 utils/nav_meta.py）。
-加密: 页面入口加密码门，与「2026 NEWNESS」页共用同一密码(Max12345)与同一套
+密码保护: 页面入口加密码门，与「2026 NEWNESS」页共用同一密码(Max12345)与同一套
       utils.newness_crypto 校验逻辑；未解锁时 st.stop()，解锁后正常渲染。
 """
 
@@ -71,22 +71,20 @@ def _try_unlock():
 
 
 if not st.session_state.get(SESSION_AUTH, False):
-    st.markdown(
-        "<div style='max-width:480px;margin:40px auto;text-align:center;"
-        "padding:32px;border-radius:18px;background:rgba(120,120,160,0.08);"
-        "border:1px solid rgba(120,120,160,0.25);'>"
-        "<div style='font-size:48px'>🔐</div>"
-        "<h3 style='margin:12px 0 4px'>该页面已加密</h3>"
-        "<p style='opacity:.7;margin:0'>本页为品牌表现分析（SELL OUT 零售），"
-        "请输入访问密码后查看。</p></div>",
-        unsafe_allow_html=True,
-    )
-    st.text_input("访问密码", type="password", key="brand_pw",
-                  placeholder="请输入密码", help="与 NEWNESS 页相同密码")
-    if st.button("🔓 解锁查看", type="primary", key="brand_unlock"):
-        _try_unlock()
-    if st.session_state.get(SESSION_ERR):
-        st.error(st.session_state[SESSION_ERR])
+    with st.container(border=True):
+        st.markdown("🔒 此页面需要访问密码，输入密码后即可查看完整内容。")
+        st.text_input(
+            "访问密码",
+            type="password",
+            key="brand_pw",
+            placeholder="请输入密码",
+            label_visibility="collapsed",
+            help="与 NEWNESS 页相同密码",
+        )
+        if st.button("🔓 解锁查看", type="primary", key="brand_unlock"):
+            _try_unlock()
+        if st.session_state.get(SESSION_ERR):
+            st.error(st.session_state[SESSION_ERR])
     # 只有「仍未解锁」才停在此页；解锁成功后继续往下渲染（同一次运行内）
     if not st.session_state.get(SESSION_AUTH, False):
         st.stop()
