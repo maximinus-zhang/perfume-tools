@@ -13,12 +13,24 @@ import pandas as pd
 import numpy as np
 import warnings
 import base64
+import os
 from utils.newness_crypto import decrypt_data
 
 warnings.filterwarnings("ignore")
 
 KB_FILE = r"C:\Users\Maximinuszhang\Desktop\WorkBuddy\知识库\2025 TR YTD Oct Sell in & Purchase. BE. 2026 Projection.xlsx"
 PURCHASE_SHEET = "purchase"
+
+# 本地知识库守卫：云端(Streamlit Cloud, Linux)无本机桌面文件，按「数据不上云」策略不读取本地文件。
+# 文件缺失时给出友好提示并优雅停止，避免原始 traceback。本地有文件则完全不受影响。
+if not os.path.exists(KB_FILE):
+    st.error(
+        "⚠️ 未检测到本地知识库文件，本页无法在云端加载数据。\n\n"
+        f"期望路径：{KB_FILE}\n\n"
+        "该页面依赖您本机桌面「知识库」中的零售报表。遵循「数据不上云」策略，"
+        "云端部署不读取本地文件。请在本机 / 本地环境运行此页查看完整数据。"
+    )
+    st.stop()
 
 EMBEDDED_TOKEN = (
     "TkVXMT+unCbW9CIFN9b0bBNK7Fyv6bwJpA/K4WP5kQH1JvrIGS3NyFMr6jHWmIOmXwntik3cLQYIJRJH"
