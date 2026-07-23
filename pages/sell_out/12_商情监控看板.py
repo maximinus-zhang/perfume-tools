@@ -916,13 +916,13 @@ with _tabs[8]:
     # 假设参数（用户可调）
     _sp1, _sp2, _sp3 = st.columns(3)
     _fc_monthly = _sp1.number_input(
-        "月固定成本（万元）", value=120, step=10,
-        help="租金 + 人员 + 装修摊销 + 行政等，假设单店 H1 平均",
+        "月固定成本（万元）", value=3000, step=100,
+        help="租金 + 人员 + 装修摊销 + 行政等；大型免税城 2000-5000 万/月，中型门店 500-1500 万/月",
         key="fc_monthly",
     )
     _vc_rate = _sp2.number_input(
-        "变动成本率%", value=12, step=1,
-        help="商品成本 + 营销摊销等占销售的比例",
+        "变动成本率%", value=65, step=5,
+        help="商品成本(COGS) + 营销摊销 + 佣金等占销售比例；免税业态约 60-75%（香水化妆品毛利率 30-40%）",
         key="vc_rate",
     ) / 100
     _tm_rate = _sp3.number_input(
@@ -943,7 +943,7 @@ with _tabs[8]:
     _bm1, _bm2, _bm3, _bm4 = st.columns(4)
     _bm1.metric("H1 盈亏平衡销售", f"{_be_h1_yi:.2f} 亿")
     _bm2.metric("盈亏平衡客单（按平均客流）",
-                  f"{_be_h1_yi * 10000 / (total_pax / len(df)) * len(df) / total_pax:,.0f} 元"
+                  f"{_be_h1_yi * 10000 / total_pax:,.0f} 元"
                   if total_pax else "—",
                   help="假设客流与 H1 估算相同，需达到的平均客单价")
     _bm3.metric("H1 估算销售（总）", f"{total_sales:.1f} 亿")
