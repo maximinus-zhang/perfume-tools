@@ -11,6 +11,7 @@ NAV = {
         {"path": "pages/sell_out/8_全国免税商情监控.py",      "title": "全国免税商情监控 2026", "icon": "📡"},
         {"path": "pages/sell_out/12_商情监控看板.py",         "title": "海南免税商情监控看板", "icon": "📈"},
         {"path": "pages/sell_out/13_竞品价格监控.py",         "title": "竞品价格监控",       "icon": "🛒"},
+        {"path": "pages/sell_out/14_品牌表现分析.py",         "title": "品牌表现分析",       "icon": "🏷️"},
     ],
     "📦 Sell In 采购端": [
         {"path": "pages/sell_in/1_order_fulfillment_analysis.py", "title": "订单满足率分析", "icon": "✅"},
