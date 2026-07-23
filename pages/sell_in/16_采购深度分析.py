@@ -56,22 +56,20 @@ def _try_unlock():
 
 
 if not st.session_state.get(SESSION_AUTH, False):
-    st.markdown(
-        "<div style='max-width:480px;margin:40px auto;text-align:center;"
-        "padding:32px;border-radius:18px;background:rgba(120,120,160,0.08);"
-        "border:1px solid rgba(120,120,160,0.25);'>"
-        "<div style='font-size:48px'>🔐</div>"
-        "<h3 style='margin:12px 0 4px'>该页面已加密</h3>"
-        "<p style='opacity:.7;margin:0'>本页为采购深度分析（Purchase / NET SELL-IN USD），"
-        "请输入访问密码后查看。</p></div>",
-        unsafe_allow_html=True,
-    )
-    st.text_input("访问密码", type="password", key="purchase_pw",
-                  placeholder="请输入密码", help="与 NEWNESS 页相同密码")
-    if st.button("🔓 解锁查看", type="primary", key="purchase_unlock"):
-        _try_unlock()
-    if st.session_state.get(SESSION_ERR):
-        st.error(st.session_state[SESSION_ERR])
+    with st.container(border=True):
+        st.markdown("🔒 此页面需要访问密码，输入密码后即可查看完整内容。")
+        st.text_input(
+            "访问密码",
+            type="password",
+            key="purchase_pw",
+            placeholder="请输入密码",
+            label_visibility="collapsed",
+            help="与 NEWNESS 页相同密码",
+        )
+        if st.button("🔓 解锁查看", type="primary", key="purchase_unlock"):
+            _try_unlock()
+        if st.session_state.get(SESSION_ERR):
+            st.error(st.session_state[SESSION_ERR])
     if not st.session_state.get(SESSION_AUTH, False):
         st.stop()
 
@@ -416,5 +414,5 @@ st.caption(
     "② 表头第 4 行、品牌数据第 5 行起；YTD 截止月份源表标注 Aug；"
     "③ **金额含 EUR/USD 币种差异，跨币种不可直接汇总**，请用顶部「币种筛选」；"
     "④ 2025 BE / 2026 预测为预估，勿与前期实际混算增速；库存月数为源表口径。"
-    "🔒 本页已加密，与 NEWNESS / 品牌表现分析 / SELL IN 深度分析 页共用同一密码(Max12345)。"
+    "🔒 本页需密码访问，与 NEWNESS / 品牌表现分析 / SELL IN 深度分析 页共用同一密码(Max12345)。"
 )

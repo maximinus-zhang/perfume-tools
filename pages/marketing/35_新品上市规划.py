@@ -79,22 +79,20 @@ def try_unlock():
 
 
 if not st.session_state.get(SESSION_AUTH, False):
-    st.markdown(
-        "<div style='max-width:480px;margin:40px auto;text-align:center;"
-        "padding:32px;border-radius:18px;background:rgba(120,120,160,0.08);"
-        "border:1px solid rgba(120,120,160,0.25);'>"
-        "<div style='font-size:48px'>🔐</div>"
-        "<h3 style='margin:12px 0 4px'>该页面已加密</h3>"
-        "<p style='opacity:.7;margin:0'>本页内容来自内部新品上市资料，"
-        "请输入访问密码后查看。</p></div>",
-        unsafe_allow_html=True,
-    )
-    pw = st.text_input("访问密码", type="password", key="newness_pw",
-                       placeholder="请输入密码", help="密码由负责人提供，不显示在页面上")
-    if st.button("🔓 解锁查看", type="primary", width='stretch'):
-        try_unlock()
-    if st.session_state.get(SESSION_ERR):
-        st.error(st.session_state[SESSION_ERR])
+    with st.container(border=True):
+        st.markdown("🔒 此页面需要访问密码，输入密码后即可查看完整内容。")
+        st.text_input(
+            "访问密码",
+            type="password",
+            key="newness_pw",
+            placeholder="请输入密码",
+            label_visibility="collapsed",
+            help="密码由负责人提供，不显示在页面上",
+        )
+        if st.button("🔓 解锁查看", type="primary", key="newness_unlock"):
+            try_unlock()
+        if st.session_state.get(SESSION_ERR):
+            st.error(st.session_state[SESSION_ERR])
     # 只有「仍未解锁」才停在此页；解锁成功后继续往下渲染看板（同一次运行内）
     if not st.session_state.get(SESSION_AUTH, False):
         st.stop()
