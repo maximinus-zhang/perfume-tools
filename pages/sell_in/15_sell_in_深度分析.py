@@ -78,7 +78,7 @@ def load_act_fcst():
     """解析 `2026 Act+Rolling Fcst`：逐月三套序列 + MTD/YTM 达成率。
     表头在第 2 行(0-based=1)；品牌数据第 3 行起。
     """
-    raw = pd.read_excel(KB_FILE, sheet_name="2026 Act+Rolling Fcst", engine="calamine", header=None)
+    raw = pd.read_excel(KB_FILE, sheet_name="2026 Act+Rolling Fcst", engine="openpyxl", header=None)
     HDR = 1
     rows = []
     for r in range(HDR + 1, len(raw)):
@@ -113,7 +113,7 @@ def load_act_fcst():
 @st.cache_data
 def load_sellin_variant(sheet, hdr=2, brand_col=4, prin_col=2):
     """通用解析 sell in / sell in R2 / sell in RMB（同结构）。"""
-    raw = pd.read_excel(KB_FILE, sheet_name=sheet, engine="calamine", header=None)
+    raw = pd.read_excel(KB_FILE, sheet_name=sheet, engine="openpyxl", header=None)
     rows = []
     for r in range(hdr + 1, len(raw)):
         brand = raw.iloc[r, brand_col]
@@ -145,7 +145,7 @@ def load_sellin_variant(sheet, hdr=2, brand_col=4, prin_col=2):
 @st.cache_data
 def load_gbb():
     """解析 `2026 GBB SELL IN`：按品牌组分块，零售商 × 季度。"""
-    raw = pd.read_excel(KB_FILE, sheet_name="2026 GBB SELL IN", engine="calamine", header=None)
+    raw = pd.read_excel(KB_FILE, sheet_name="2026 GBB SELL IN", engine="openpyxl", header=None)
     blocks = []
     r = 0
     while r < len(raw):
@@ -187,13 +187,13 @@ def load_budget_evolution():
     注意：各版本统计口径/品牌范围可能不同（如 R1 为全口径锁定版），绝对额不可直接横比。
     """
     import re
-    xl = pd.ExcelFile(KB_FILE, engine="calamine")
+    xl = pd.ExcelFile(KB_FILE, engine="openpyxl")
     vers = [s for s in xl.sheet_names if s.startswith("2026 Budget")]
     out = {}
     brand_count = {}
     for s in vers:
         try:
-            raw = pd.read_excel(KB_FILE, sheet_name=s, engine="calamine", header=None)
+            raw = pd.read_excel(KB_FILE, sheet_name=s, engine="openpyxl", header=None)
             month_cols = []
             annual_col = None
             for rr in range(0, min(6, raw.shape[0])):

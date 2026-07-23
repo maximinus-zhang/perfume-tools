@@ -72,7 +72,7 @@ if st.sidebar.button("🔒 重新上锁", key="purchase_relock"):
 @st.cache_data
 def load_purchase():
     """读取 `purchase` 表（表头第 4 行，数据第 5 行起，共 42 列）。"""
-    raw = pd.read_excel(KB_FILE, sheet_name=PURCHASE_SHEET, engine="calamine", header=None)
+    raw = pd.read_excel(KB_FILE, sheet_name=PURCHASE_SHEET, engine="openpyxl", header=None)
     HDR = 3
     SKIP = {"TTL", "TOTAL", "NAN", "", "合计", "GRAND TOTAL"}
     rows = []

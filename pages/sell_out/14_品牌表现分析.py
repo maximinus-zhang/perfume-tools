@@ -109,7 +109,7 @@ def load_brand_yoy():
         months25 : dict 品牌 -> [12个2025月值]
         months26 : dict 品牌 -> [12个2026月值]
     """
-    raw = pd.read_excel(KB_FILE, sheet_name="26vs25", engine="calamine", header=None)
+    raw = pd.read_excel(KB_FILE, sheet_name="26vs25", engine="openpyxl", header=None)
 
     # 找到「所有店铺」标题行
     r0 = None
@@ -162,7 +162,7 @@ def load_market_data():
         long : DataFrame[品牌, 市场, 销售额]
         brands_in_db : database 中出现的品牌列表
     """
-    db = pd.read_excel(KB_FILE, sheet_name="database", engine="calamine",
+    db = pd.read_excel(KB_FILE, sheet_name="database", engine="openpyxl",
                        usecols=["Stores", "品牌", "销售金额"])
     db["销售金额"] = pd.to_numeric(db["销售金额"], errors="coerce")
     db = db.dropna(subset=["销售金额", "品牌"])
