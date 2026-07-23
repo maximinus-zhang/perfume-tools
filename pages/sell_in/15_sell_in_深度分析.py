@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-SELL IN 深度分析 v2.0（重写·扩维·加密）
+SELL IN 深度分析 v2.0（重写·扩维·密码保护）
 =======================================
 在 v1 基础上，用足知识库工作簿里之前完全没碰的维度，覆盖六大分析主题。
 数据来源: 桌面知识库《2025 TR YTD Oct Sell in & Purchase. BE. 2026 Projection.xlsx》
@@ -9,7 +9,7 @@ SELL IN 深度分析 v2.0（重写·扩维·加密）
   - `sell in` / `sell in R2` / `sell in RMB` : 同结构异数值，用于口径与修订对比
   - `2026 GBB SELL IN` : 按品牌组 × 零售商 × 季度 的渠道 SELL IN
   - `2026 Budget 9.25 … R1 / 2026 Budget_v1` : 2026 计划的多次迭代，用于预测演进
-加密: 与 NEWNESS / 品牌表现分析 / 采购深度分析 页共用同一密码(Max12345)与 utils.newness_crypto。
+密码保护: 与 NEWNESS / 品牌表现分析 / 采购深度分析 页共用同一密码(Max12345)与 utils.newness_crypto。
 """
 import streamlit as st
 import pandas as pd
@@ -49,22 +49,20 @@ def _try_unlock():
 
 
 if not st.session_state.get(SESSION_AUTH, False):
-    st.markdown(
-        "<div style='max-width:480px;margin:40px auto;text-align:center;"
-        "padding:32px;border-radius:18px;background:rgba(120,120,160,0.08);"
-        "border:1px solid rgba(120,120,160,0.25);'>"
-        "<div style='font-size:48px'>🔐</div>"
-        "<h3 style='margin:12px 0 4px'>该页面已加密</h3>"
-        "<p style='opacity:.7;margin:0'>本页为 SELL IN 深度分析 v2.0（扩维多维度），"
-        "请输入访问密码后查看。</p></div>",
-        unsafe_allow_html=True,
-    )
-    st.text_input("访问密码", type="password", key="sellin_pw",
-                  placeholder="请输入密码", help="与 NEWNESS 页相同密码")
-    if st.button("🔓 解锁查看", type="primary", key="sellin_unlock"):
-        _try_unlock()
-    if st.session_state.get(SESSION_ERR):
-        st.error(st.session_state[SESSION_ERR])
+    with st.container(border=True):
+        st.markdown("🔒 此页面需要访问密码，输入密码后即可查看完整内容。")
+        st.text_input(
+            "访问密码",
+            type="password",
+            key="sellin_pw",
+            placeholder="请输入密码",
+            label_visibility="collapsed",
+            help="与 NEWNESS 页相同密码",
+        )
+        if st.button("🔓 解锁查看", type="primary", key="sellin_unlock"):
+            _try_unlock()
+        if st.session_state.get(SESSION_ERR):
+            st.error(st.session_state[SESSION_ERR])
     if not st.session_state.get(SESSION_AUTH, False):
         st.stop()
 
@@ -267,9 +265,9 @@ def load_budget_evolution():
 
 
 # ===================== 页面主体 =====================
-st.title("🔒 SELL IN 深度分析 v2.0")
+st.title("SELL IN 深度分析 v2.0")
 st.caption("SELL IN · 扩维多维度 · 数据来源：2025 TR YTD…Sell in & Purchase…xlsx（多工作表）"
-           " ｜ 本地知识库，不上云 ｜ 🔒 密码保护与 NEWNESS / 品牌表现 / 采购深度 页一致")
+           " ｜ 本地知识库，不上云 ｜ 密码保护与 NEWNESS / 品牌表现 / 采购深度 页一致")
 
 af = load_act_fcst()
 si = load_sellin_variant("sell in")
@@ -490,5 +488,5 @@ st.caption(
     "③ `sell in` / `sell in R2` / `sell in RMB` 为同结构异数值的口径与修订快照；"
     "④ `2026 GBB SELL IN` 为按品牌组×零售商×季度的渠道 SELL IN；"
     "⑤ `2026 Budget*` 共 10 个版本用于预测演进轨迹；"
-    "⑥ 金额单位以源表为准（管报口径），跨口径(USD/RMB)对比仅看差异方向、不混算。🔒 本页已加密，与 NEWNESS / 品牌表现分析 / 采购深度 页共用同一密码(Max12345)。"
+    "⑥ 金额单位以源表为准（管报口径），跨口径(USD/RMB)对比仅看差异方向、不混算。与 NEWNESS / 品牌表现分析 / 采购深度 页共用同一密码(Max12345)。"
 )

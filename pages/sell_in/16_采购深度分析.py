@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-采购深度分析 v2.0（重写·扩维·加密）
+采购深度分析 v2.0（重写·扩维·密码保护）
 =======================================
 在 v1 基础上深挖 `purchase` 表（42 列）全字段，覆盖采购执行、库存健康评分、品牌方支持度、币种暴露四大主题。
 数据来源: 桌面知识库《2025 TR YTD Oct Sell in & Purchase. BE. 2026 Projection.xlsx》→ 工作表 `purchase`
 口径: 采购(Purchase) 口径，属 SELL IN（向品牌方采购），非 SELL OUT 零售。
       **金额含 EUR/USD 币种差异，跨币种不可直接汇总**——顶部「币种筛选」控制金额合计；库存月数/比率为无量纲，跨币种可比。
-加密: 与 NEWNESS / 品牌表现分析 / SELL IN 深度分析 页共用同一密码(Max12345)与 utils.newness_crypto。
+密码保护: 与 NEWNESS / 品牌表现分析 / SELL IN 深度分析 页共用同一密码(Max12345)与 utils.newness_crypto。
 """
 import streamlit as st
 import pandas as pd
@@ -45,22 +45,20 @@ def _try_unlock():
 
 
 if not st.session_state.get(SESSION_AUTH, False):
-    st.markdown(
-        "<div style='max-width:480px;margin:40px auto;text-align:center;"
-        "padding:32px;border-radius:18px;background:rgba(120,120,160,0.08);"
-        "border:1px solid rgba(120,120,160,0.25);'>"
-        "<div style='font-size:48px'>🔐</div>"
-        "<h3 style='margin:12px 0 4px'>该页面已加密</h3>"
-        "<p style='opacity:.7;margin:0'>本页为采购深度分析 v2.0（扩维多维度），"
-        "请输入访问密码后查看。</p></div>",
-        unsafe_allow_html=True,
-    )
-    st.text_input("访问密码", type="password", key="purchase_pw",
-                  placeholder="请输入密码", help="与 NEWNESS 页相同密码")
-    if st.button("🔓 解锁查看", type="primary", key="purchase_unlock"):
-        _try_unlock()
-    if st.session_state.get(SESSION_ERR):
-        st.error(st.session_state[SESSION_ERR])
+    with st.container(border=True):
+        st.markdown("🔒 此页面需要访问密码，输入密码后即可查看完整内容。")
+        st.text_input(
+            "访问密码",
+            type="password",
+            key="purchase_pw",
+            placeholder="请输入密码",
+            label_visibility="collapsed",
+            help="与 NEWNESS 页相同密码",
+        )
+        if st.button("🔓 解锁查看", type="primary", key="purchase_unlock"):
+            _try_unlock()
+        if st.session_state.get(SESSION_ERR):
+            st.error(st.session_state[SESSION_ERR])
     if not st.session_state.get(SESSION_AUTH, False):
         st.stop()
 
@@ -148,9 +146,9 @@ def _risk_level(score):
 
 
 # ===================== 页面主体 =====================
-st.title("🔒 采购深度分析 v2.0")
+st.title("采购深度分析 v2.0")
 st.caption("SELL IN · 采购(Purchase) · 数据来源：2025 TR YTD…Sell in & Purchase…xlsx（purchase 表）"
-           " ｜ 本地知识库，不上云 ｜ 🔒 密码保护与 NEWNESS / 品牌表现分析 / SELL IN 深度 页一致")
+           " ｜ 本地知识库，不上云 ｜ 密码保护与 NEWNESS / 品牌表现分析 / SELL IN 深度 页一致")
 
 df = load_purchase()
 if df.empty:
@@ -188,8 +186,8 @@ with tab1:
         }).style.format({
             "YTD开票": "{:,.0f}", "YTD PO": "{:,.0f}", "2025 BE": "{:,.0f}", "2026预测": "{:,.0f}",
             "开票率": "{:.1%}", "开票达成": "{:.1%}", "PO达成": "{:.1%}",
-        }).background_gradient(subset=["开票率"], cmap="RdYlGn")
-        .background_gradient(subset=["AchInv"], cmap="RdYlGn"),
+        }        ).background_gradient(subset=["开票率"], cmap="RdYlGn")
+        .background_gradient(subset=["开票达成"], cmap="RdYlGn"),
         use_container_width=True,
         column_config={
             "开票率": st.column_config.NumberColumn("开票率", format="%.1%"),
@@ -317,5 +315,5 @@ st.caption(
     "② 表头第 4 行、品牌数据第 5 行起；YTD 截止月份源表标注 Aug；"
     "③ **金额含 EUR/USD 币种差异，跨币种不可直接汇总**（顶部「币种筛选」控制金额合计）；"
     "④ 库存月数/开票率/支持度占比为无量纲比率，跨币种可比；"
-    "⑤ 库存健康评分=基于总库存月数的经验规则（3–6 月满分），供排序参考非精算。🔒 本页已加密，与 NEWNESS / 品牌表现分析 / SELL IN 深度 页共用同一密码(Max12345)。"
+    "⑤ 库存健康评分=基于总库存月数的经验规则（3–6 月满分），供排序参考非精算。与 NEWNESS / 品牌表现分析 / SELL IN 深度 页共用同一密码(Max12345)。"
 )

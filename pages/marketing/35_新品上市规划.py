@@ -70,7 +70,7 @@ def try_unlock():
     except FileNotFoundError:
         st.session_state[SESSION_AUTH] = False
         st.session_state[SESSION_ERR] = (
-            f"⚠️ 找不到加密数据文件：\n`{DATA_PATH}`\n\n"
+            f"⚠️ 找不到数据文件：\n`{DATA_PATH}`\n\n"
             f"请确认 `data/newness_encrypted.bin` 已放在项目根目录的 `data/` 文件夹下。"
         )
     except Exception as e:                       # 文件损坏等其它异常
@@ -123,7 +123,7 @@ c2.metric("现有品牌", len(existing))
 c3.metric("新增品牌", len(new_brands))
 c4.metric("关键节日节点", len(festivals))
 
-st.caption("🔒 数据已本地加密（data/newness_encrypted.bin），本页为解密后视图，与同机其它项目隔离。")
+st.caption("🔒 本页数据已本地保护（data/newness_encrypted.bin），解锁后视图，与同机其它项目隔离。")
 
 
 # ======================================================================
@@ -237,5 +237,5 @@ if bp:
     st.dataframe(bpdf, width='stretch', hide_index=True)
 
 st.divider()
-st.caption("页面由「派派 · 高级开发工程师」构建：轻量加密(PBKDF2+XOR) + Streamlit 原生渲染，"
+st.caption("页面由「派派 · 高级开发工程师」构建：轻量密码保护(PBKDF2+XOR) + Streamlit 原生渲染，"
            "敏感内容不落明文、不依赖外部网络。")
