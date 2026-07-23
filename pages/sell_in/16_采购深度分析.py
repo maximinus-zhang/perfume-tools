@@ -289,7 +289,7 @@ with tab3:
     with c2:
         st.markdown("**支持力度最弱 Top 5**")
         st.dataframe(sup.tail(5)[["Brand", "支持力度"]].rename(
-            columns={"Brand": "品牌", "支持力度": "支持力度指数"}).style.format({"支持力度指数": "{:.1%"}))
+            columns={"Brand": "品牌", "支持力度": "支持力度指数"}).style.format({"支持力度指数": "{:.1%}"}))
 
 # ---------- Tab4: 币种暴露 ----------
 with tab4:
