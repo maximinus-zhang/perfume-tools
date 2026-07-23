@@ -1,9 +1,19 @@
 # utils/oss_helper.py
+import os
 import streamlit as st
 import oss2
 import pandas as pd
 from io import BytesIO
 from datetime import datetime
+
+# ===== 知识库工作簿（KB）统一读取：私有 OSS 优先，本地兜底 =====
+# 文件本身存于用户自有阿里云 OSS（bucket=maximinus-flies），ACL=private，
+# 仅持有密钥的 App（本地 / Streamlit Cloud）可读取；外部/他人无法直接下载。
+# 采购/SELL IN 深度 页用 TR YTD 工作簿；品牌表现分析 页用 01零售报表 工作簿。
+KB_OSS_KEY = "kb/2025 TR YTD Oct Sell in & Purchase. BE. 2026 Projection.xlsx"
+KB_LOCAL = r"C:\Users\Maximinuszhang\Desktop\WorkBuddy\知识库\2025 TR YTD Oct Sell in & Purchase. BE. 2026 Projection.xlsx"
+KB_OSS_KEY_BRAND = "kb/01零售报表-品牌合计总表_6.2026.xlsx"
+KB_LOCAL_BRAND = r"C:\Users\Maximinuszhang\Desktop\WorkBuddy\知识库\01零售报表-品牌合计总表_6.2026.xlsx"
 
 def get_bucket():
     """获取 OSS Bucket 对象"""
@@ -39,7 +49,8 @@ def read_excel_from_oss(remote_path: str, sheet_name: int = 1, prefix_filter: st
         obj = bucket.get_object(remote_path)
         
         # 先读取全部数据（不指定 header），扫描找到真正的表头行
-        df_raw = pd.read_excel(BytesIO(obj.read()), sheet_name=sheet_name, header=None)
+        # 优先 calamine（忽略样式，兼容个别 openpyxl 解析失败的 xlsx），失败回落 openpyxl
+        df_raw = _read_excel_robust(BytesIO(obj.read()), sheet_name=sheet_name, header=None)
         
         # 去除全空行
         df_raw = df_raw.dropna(how='all').reset_index(drop=True)
@@ -64,7 +75,7 @@ def read_excel_from_oss(remote_path: str, sheet_name: int = 1, prefix_filter: st
         
         # 重新读取，指定正确的表头行
         obj2 = bucket.get_object(remote_path)
-        df = pd.read_excel(BytesIO(obj2.read()), sheet_name=sheet_name, header=header_row)
+        df = _read_excel_robust(BytesIO(obj2.read()), sheet_name=sheet_name, header=header_row)
         
         # 去除全空行
         df = df.dropna(how='all').reset_index(drop=True)
@@ -105,3 +116,64 @@ def upload_section(remote_path: str, label: str = "上传数据文件"):
             with st.spinner("正在上传到云端..."):
                 upload_to_oss(uploaded, remote_path)
             st.success(f"✅ 上传成功！{datetime.now().strftime('%H:%M:%S')}")
+
+# ===== 知识库（KB）Excel 读取：私有 OSS 优先，本地兜底 =====
+def read_excel_raw_from_oss(remote_path: str):
+    """返回 OSS 对象的 BytesIO；不存在或出错返回 None（调用方回落本地）。"""
+    try:
+        bucket = get_bucket()
+        if not bucket.object_exists(remote_path):
+            return None
+        return BytesIO(bucket.get_object(remote_path).read())
+    except Exception:
+        return None
+
+def _read_excel_robust(src, **kwargs):
+    """读取 Excel：优先 calamine（Rust 解析、忽略样式，兼容个别 openpyxl 解析失败的 xlsx），
+    失败回落 openpyxl。src 可为本地路径或 BytesIO。"""
+    last_err = None
+    for eng in ("calamine", "openpyxl"):
+        try:
+            return pd.read_excel(src, engine=eng, **kwargs)
+        except Exception as e:
+            last_err = e
+    raise last_err
+
+def _excelfile_robust(src, **kwargs):
+    """同 _read_excel_robust，但返回 ExcelFile 对象（用于列举/解析多个 sheet）。"""
+    last_err = None
+    for eng in ("calamine", "openpyxl"):
+        try:
+            return pd.ExcelFile(src, engine=eng, **kwargs)
+        except Exception as e:
+            last_err = e
+    raise last_err
+
+def read_kb_excel(sheet_name, header=None, engine=None,
+                  oss_key=KB_OSS_KEY, local_path=KB_LOCAL, **kwargs):
+    """读取 KB 工作簿指定 sheet。优先私有 OSS，读不到回落本地路径。
+    engine=None 时自动选用 calamine（优先）→ openpyxl（兜底）；也可显式指定单一引擎。
+    其余关键字参数（如 usecols）透传给 pd.read_excel。"""
+    data = read_excel_raw_from_oss(oss_key)
+    src = data if data is not None else local_path
+    if engine:
+        return pd.read_excel(src, sheet_name=sheet_name, header=header, engine=engine, **kwargs)
+    return _read_excel_robust(src, sheet_name=sheet_name, header=header, **kwargs)
+
+def kb_excelfile(engine=None, oss_key=KB_OSS_KEY, local_path=KB_LOCAL):
+    """返回 KB 工作簿的 ExcelFile 对象（用于列举 sheet_names）。优先 OSS，回落本地。
+    engine=None 时自动 calamine→openpyxl 兜底。"""
+    data = read_excel_raw_from_oss(oss_key)
+    src = data if data is not None else local_path
+    if engine:
+        return pd.ExcelFile(src, engine=engine)
+    return _excelfile_robust(src)
+
+def kb_available(oss_key=KB_OSS_KEY, local_path=KB_LOCAL):
+    """KB 数据是否可获取（本地文件存在 或 私有 OSS 对象可读取）。"""
+    if os.path.exists(local_path):
+        return True
+    try:
+        return read_excel_raw_from_oss(oss_key) is not None
+    except Exception:
+        return False

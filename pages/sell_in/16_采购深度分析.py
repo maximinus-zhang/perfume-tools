@@ -15,20 +15,21 @@ import warnings
 import base64
 import os
 from utils.newness_crypto import decrypt_data
+from utils.oss_helper import read_kb_excel, kb_available
 
 warnings.filterwarnings("ignore")
 
 KB_FILE = r"C:\Users\Maximinuszhang\Desktop\WorkBuddy\知识库\2025 TR YTD Oct Sell in & Purchase. BE. 2026 Projection.xlsx"
 PURCHASE_SHEET = "purchase"
 
-# 本地知识库守卫：云端(Streamlit Cloud, Linux)无本机桌面文件，按「数据不上云」策略不读取本地文件。
-# 文件缺失时给出友好提示并优雅停止，避免原始 traceback。本地有文件则完全不受影响。
-if not os.path.exists(KB_FILE):
+# 知识库守卫：优先读取您私有 OSS（本地 / Streamlit Cloud 均凭密钥可读，他人不可下载），
+# 其次回落本机文件。两端皆不可达才提示并停止，避免原始 traceback。
+if not kb_available():
     st.error(
-        "⚠️ 未检测到本地知识库文件，本页无法在云端加载数据。\n\n"
-        f"期望路径：{KB_FILE}\n\n"
-        "该页面依赖您本机桌面「知识库」中的零售报表。遵循「数据不上云」策略，"
-        "云端部署不读取本地文件。请在本机 / 本地环境运行此页查看完整数据。"
+        "⚠️ 未能加载知识库数据。\n\n"
+        "本页依赖您的零售报表工作簿（2025 TR YTD Oct Sell in & Purchase…xlsx）。\n"
+        "数据存放于您自有阿里云 OSS（私有），本地与云端 App 均凭密钥读取；"
+        "若两端都不可达，请确认本地知识库文件存在，或 OSS 密钥已在 Streamlit Cloud Secrets 中配置。"
     )
     st.stop()
 
@@ -84,7 +85,7 @@ if st.sidebar.button("🔒 重新上锁", key="purchase_relock"):
 @st.cache_data
 def load_purchase():
     """读取 `purchase` 表（表头第 4 行，数据第 5 行起，共 42 列）。"""
-    raw = pd.read_excel(KB_FILE, sheet_name=PURCHASE_SHEET, engine="openpyxl", header=None)
+    raw = read_kb_excel(sheet_name=PURCHASE_SHEET, header=None)
     HDR = 3
     SKIP = {"TTL", "TOTAL", "NAN", "", "合计", "GRAND TOTAL"}
     rows = []

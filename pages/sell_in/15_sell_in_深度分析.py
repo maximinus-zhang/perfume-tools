@@ -18,20 +18,21 @@ import warnings
 import base64
 import os
 from utils.newness_crypto import decrypt_data
+from utils.oss_helper import read_kb_excel, kb_excelfile, kb_available
 
 warnings.filterwarnings("ignore")
 
 KB_FILE = r"C:\Users\Maximinuszhang\Desktop\WorkBuddy\知识库\2025 TR YTD Oct Sell in & Purchase. BE. 2026 Projection.xlsx"
 MONTHS = ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]
 
-# 本地知识库守卫：云端(Streamlit Cloud, Linux)无本机桌面文件，按「数据不上云」策略不读取本地文件。
-# 文件缺失时给出友好提示并优雅停止，避免原始 traceback。本地有文件则完全不受影响。
-if not os.path.exists(KB_FILE):
+# 知识库数据守卫：优先私有 OSS（本地 / Streamlit Cloud 均可读），其次本地文件。
+# 两者皆不可达（既无本地文件、OSS 也无凭证）才提示并停止，避免原始 traceback。
+if not kb_available():
     st.error(
-        "⚠️ 未检测到本地知识库文件，本页无法在云端加载数据。\n\n"
-        f"期望路径：{KB_FILE}\n\n"
-        "该页面依赖您本机桌面「知识库」中的零售报表。遵循「数据不上云」策略，"
-        "云端部署不读取本地文件。请在本机 / 本地环境运行此页查看完整数据。"
+        "⚠️ 未能加载知识库数据。\n\n"
+        "本页依赖您的零售报表工作簿（2025 TR YTD Oct Sell in & Purchase…xlsx）。\n"
+        "数据存放于您自有阿里云 OSS（私有），本地与云端 App 均凭密钥读取；"
+        "若两端都不可达，请确认本地知识库文件存在，或 OSS 密钥已在 Streamlit Cloud Secrets 中配置。"
     )
     st.stop()
 
@@ -90,7 +91,7 @@ def load_act_fcst():
     """解析 `2026 Act+Rolling Fcst`：逐月三套序列 + MTD/YTM 达成率。
     表头在第 2 行(0-based=1)；品牌数据第 3 行起。
     """
-    raw = pd.read_excel(KB_FILE, sheet_name="2026 Act+Rolling Fcst", engine="openpyxl", header=None)
+    raw = read_kb_excel(sheet_name="2026 Act+Rolling Fcst", header=None)
     HDR = 1
     rows = []
     for r in range(HDR + 1, len(raw)):
@@ -125,7 +126,7 @@ def load_act_fcst():
 @st.cache_data
 def load_sellin_variant(sheet, hdr=2, brand_col=4, prin_col=2):
     """通用解析 sell in / sell in R2 / sell in RMB（同结构）。"""
-    raw = pd.read_excel(KB_FILE, sheet_name=sheet, engine="openpyxl", header=None)
+    raw = read_kb_excel(sheet_name=sheet, header=None)
     rows = []
     for r in range(hdr + 1, len(raw)):
         brand = raw.iloc[r, brand_col]
@@ -157,7 +158,7 @@ def load_sellin_variant(sheet, hdr=2, brand_col=4, prin_col=2):
 @st.cache_data
 def load_gbb():
     """解析 `2026 GBB SELL IN`：按品牌组分块，零售商 × 季度。"""
-    raw = pd.read_excel(KB_FILE, sheet_name="2026 GBB SELL IN", engine="openpyxl", header=None)
+    raw = read_kb_excel(sheet_name="2026 GBB SELL IN", header=None)
     blocks = []
     r = 0
     while r < len(raw):
@@ -199,13 +200,13 @@ def load_budget_evolution():
     注意：各版本统计口径/品牌范围可能不同（如 R1 为全口径锁定版），绝对额不可直接横比。
     """
     import re
-    xl = pd.ExcelFile(KB_FILE, engine="openpyxl")
+    xl = kb_excelfile()
     vers = [s for s in xl.sheet_names if s.startswith("2026 Budget")]
     out = {}
     brand_count = {}
     for s in vers:
         try:
-            raw = pd.read_excel(KB_FILE, sheet_name=s, engine="openpyxl", header=None)
+            raw = read_kb_excel(s, header=None)
             month_cols = []
             annual_col = None
             for rr in range(0, min(6, raw.shape[0])):
