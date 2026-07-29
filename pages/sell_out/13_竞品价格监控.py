@@ -30,6 +30,7 @@ import streamlit as st
 from datetime import datetime
 import pandas as pd
 import threading
+import os
 
 st.set_page_config(page_title="竞品价格监控", page_icon="🛒", layout="wide")
 
@@ -90,6 +91,31 @@ def _discount_pct(rec) -> float | None:
     return rec.discount_rate
 
 
+def _find_deep_html() -> str | None:
+    """定位深度竞品分析报告 HTML。
+
+    部署到阿里云后，原来的 Windows 绝对路径失效，这里改用相对路径 +
+    多候选兜底 + 环境变量覆盖，保证换机器也能找到文件。
+    """
+    _NAME = "海南免税香水竞品分析.html"
+    try:
+        _HERE = os.path.dirname(os.path.abspath(__file__))
+    except NameError:
+        # 极少数运行环境（如直接 exec 源码）无 __file__，退回当前工作目录
+        _HERE = os.getcwd()
+    _candidates = [
+        os.path.join(_HERE, "..", "..", "reports", _NAME),   # 标准布局：项目根/reports/
+        os.path.join(_HERE, "..", "..", _NAME),              # 退路：项目根
+        os.path.join(_HERE, _NAME),                          # 与页面同目录
+        os.path.join(os.getcwd(), "reports", _NAME),         # cwd/reports（部署兜底）
+        os.environ.get("DEEP_ANALYSIS_HTML", ""),            # 环境变量强制指定
+    ]
+    for _c in _candidates:
+        if _c and os.path.isfile(_c):
+            return os.path.abspath(_c)
+    return None
+
+
 # ============================================================
 # 侧栏：抓取控制
 # ============================================================
@@ -124,9 +150,9 @@ with st.sidebar:
 
 
 # ============================================================
-# Tab 1：监控看板   /   Tab 2：品牌货架速览
+# Tab 1：监控看板   /   Tab 2：品牌货架速览   /   Tab 3：深度竞品分析
 # ============================================================
-tab_board, tab_shelf = st.tabs(["📊 监控看板", "🛒 品牌货架速览"])
+tab_board, tab_shelf, tab_deep = st.tabs(["📊 监控看板", "🛒 品牌货架速览", "🔍 深度竞品分析"])
 
 
 # ------------------------------------------------------------
@@ -327,6 +353,36 @@ with tab_shelf:
         st.caption("说明：折扣率= (有税参考价−免税价)/有税参考价；促销标签来自中免「秒杀价/促销」等。")
     else:
         st.info("ℹ️ 点上方「查询货架」查看该品牌在中免的在售商品与折扣。", icon="ℹ️")
+
+
+# ------------------------------------------------------------
+# Tab 3 · 深度竞品分析（海南免税香水竞品格局 + 自营品牌对标）
+# ------------------------------------------------------------
+with tab_deep:
+    _deep_html_path = _find_deep_html()
+    st.subheader("🔍 海南免税香水深度竞品分析")
+    st.caption(
+        "视角：① 沙龙/小众香在海南免税的布局　② 免税运营商竞争格局（一超多强）"
+        "　③ 自营品牌（VERSACE / 玛丽之香PDM / MOSCHINO / ACCA KAPPA / LAURA MERCIER）一对一竞品对标"
+    )
+    if _deep_html_path is None:
+        st.error(
+            "⚠️ 深度竞品分析报告文件未找到。\n"
+            "请确认 `reports/海南免税香水竞品分析.html` 已随代码部署；"
+            "或用环境变量 `DEEP_ANALYSIS_HTML` 指定其绝对路径。"
+        )
+    else:
+        try:
+            with open(_deep_html_path, "r", encoding="utf-8") as _f:
+                _html_content = _f.read()
+            st.components.v1.html(_html_content, height=900, scrolling=True)
+        except Exception as _e:
+            st.error(f"⚠️ 报告读取失败：{_e}")
+    st.markdown("---")
+    st.info(
+        "💡 **使用提示**：本 Tab 嵌入的是独立生成的深度分析报告（HTML），"
+        "与「监控看板」的实时抓取数据相互补充——前者看**格局/品牌定位/渠道策略**，后者看**实时标价/折扣/降价预警**。"
+    )
 
 
 # ============================================================
