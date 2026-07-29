@@ -1,67 +1,53 @@
-# 海南免税香水工具站 · 阿里云轻量应用服务器部署指南
+# 海南免税香水工具站 · 本地运行 + OSS 报告分享指南
 
-## 一、前提
-- 你已有阿里云**轻量应用服务器**实例（推荐 2核4G / Alibaba Cloud Linux 3 或 Ubuntu 22.04）。
-- 本项目已推送到 GitHub：`git@github.com:maximinus-zhang/perfume-tools.git`
-- 「深度竞品分析」Tab 的报告已随代码放在 `reports/海南免税香水竞品分析.html`
-  （已修复原来硬编码的 Windows 绝对路径，改用相对路径 + 环境变量兜底，部署不会找不到文件）。
+> **前提说明**：你**没有云服务器**，只有阿里云 OSS（存储桶）。因此本应用**在本地 Windows 运行**，
+> 深度竞品分析 HTML 报告通过 OSS 上传，生成可随时打开 / 分享的链接。
+> Streamlit 必须有个能跑 Python 的环境，OSS 只是存储、跑不了应用，所以无法公网常驻访问。
 
-## 二、服务器端一次性操作
-1. **放端口**：控制台 → 防火墙/安全组 → 放行 **TCP 8501** 入方向（来源 `0.0.0.0/0`，或限定你的办公 IP）。
-2. **SSH 登录**服务器。
-3. **装基础依赖**：
-   - Alibaba Cloud Linux / CentOS：`sudo yum install -y git python3 python3-pip`
-   - Ubuntu：`sudo apt update && sudo apt install -y git python3 python3-venv python3-pip`
-4. **拉代码**（二选一）：
-   - 方式 A（推荐）：把服务器的 SSH 公钥加到 GitHub **Deploy Key**，然后
-     `git clone git@github.com:maximinus-zhang/perfume-tools.git`
-   - 方式 B：本机已 `git push`，服务器用 HTTPS 克隆 / 或之后 `git pull`。
-5. **启动**：`cd perfume-tools && bash start_server.sh`
-6. 浏览器访问 `http://<公网IP>:8501`。
+---
 
-## 三、后续更新代码
-本机改完 → `git push`；服务器执行：
+## 一、本地运行（已在你电脑就绪）
+
+1. 进入项目目录 `perfume-tools-main`
+2. 双击 `启动项目.bat`（或在命令行运行 `python -m streamlit run app.py`）
+3. 浏览器自动打开 `http://localhost:8501`
+4. 左侧菜单 → **Sell Out** → **竞品价格监控** → 第三个 Tab **「🔍 深度竞品分析」**即可看到报告
+
+> 报告文件已随代码放在 `reports/海南免税香水竞品分析.html`
+> （已修复原来硬编码的 Windows 绝对路径，本地直接可读，不依赖 OSS）。
+
+---
+
+## 二、把深度竞品分析报告上传到 OSS（拿分享链接）
+
+前提：已在 `.streamlit/secrets.toml` 配置 `OSS_ACCESS_KEY` / `OSS_SECRET_KEY`
+（应用读取知识库 xlsx 也用这对凭证，配好即可复用）。
+
+### 方式 A —— 一键脚本（推荐）
 ```bash
-cd perfume-tools
-git pull
-bash start_server.sh
+cd perfume-tools-main
+python upload_report_to_oss.py            # 默认「公开读」，打印可分享链接
+python upload_report_to_oss.py --private  # 仅自己看，生成 7 天有效签名链接
 ```
-（脚本会重建 venv 依赖并重启；旧进程用 `pkill -f "streamlit run"` 清掉即可。）
+脚本会打印一个 OSS 链接，浏览器打开即可看报告，也能直接发给同事。
 
-## 四、可选增强
-- **实时抓取（Tab1/Tab2）用到 Playwright**：服务器需先装浏览器内核
-  `venv/bin/playwright install --with-deps chromium`（需 root + 联网）。
-- **域名 + HTTPS**：在 8501 前加 Nginx 反代，申请免费证书（Let's Encrypt）。
-- **持久化**：用 systemd 托管，避免 SSH 断开后进程退出（示例见下）。
+### 方式 B —— 控制台手动上传（无需脚本）
+1. 登录阿里云 OSS 控制台 → Bucket `maximinus-flies`
+2. 进入 / 新建 `reports/` 目录，上传 `reports/海南免税香水竞品分析.html`
+3. 该文件 → 设置 ACL 为「公共读」→ 复制文件 URL（中文名会自动编码）
 
-## 五、systemd 单元示例（可选，推荐生产用）
-`/etc/systemd/system/perfume.service`：
-```ini
-[Unit]
-Description=Perfume Tools Streamlit
-After=network.target
+---
 
-[Service]
-WorkingDirectory=/root/perfume-tools
-ExecStart=/root/perfume-tools/venv/bin/streamlit run app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true
-Restart=always
-User=root
+## 三、更新报告
 
-[Install]
-WantedBy=multi-user.target
-```
-启用：
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now perfume
-# 查看状态 / 日志
-sudo systemctl status perfume
-journalctl -u perfume -f
-```
+报告内容有变动时，重新生成 HTML 覆盖 `reports/` 下文件，再跑一次
+`python upload_report_to_oss.py` 即可覆盖 OSS 上的旧版本。
 
-## 六、常见坑
-- **8501 打不开** → 先查安全组是否放行；再查 `streamlit.log`。
-- **深度分析 Tab 空白/报错** → 确认 `reports/海南免税香水竞品分析.html` 已随 `git pull` 下来
-  （可用 `ls reports/` 验证；也支持环境变量 `DEEP_ANALYSIS_HTML` 强制指定绝对路径）。
-- **内存不足** → 轻量 2核2G 跑 Streamlit + Playwright 偏紧，建议 ≥4G。
-- **GitHub 克隆要密码** → 改用 Deploy Key（服务器公钥）或 Personal Access Token（HTTPS）。
+---
+
+## 四、注意事项
+
+- 上传到 OSS 的是「竞品分析报告 HTML」，**不含你的原始销售数据**。
+- 若设为「公开读」，链接**任何人可访问**——请勿在报告里放机密信息；只想自己看请用 `--private`。
+- 应用其它数据（知识库 xlsx）走 `utils/oss_helper.py` 的**私有 OSS** 通道，密钥不外泄。
+- 若以后买了云服务器想公网部署，再单独找我出服务器方案（原 `start_server.sh` 已删除）。
