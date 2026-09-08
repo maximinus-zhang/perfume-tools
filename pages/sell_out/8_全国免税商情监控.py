@@ -14,6 +14,7 @@ import pandas as pd
 import numpy as np
 import os
 import re
+import plotly.graph_objects as go
 from datetime import datetime
 from utils.hainan_scraper import HainanScraper, AIRPORT_DB
 from utils.hainan_2026_data import HA_DF_2026, AIRPORT_INTL, SOURCE_NOTE
@@ -422,6 +423,86 @@ st.info(
     "③ 6月(反推)~15亿为上半年低点，7–8月暑运通常回升，可结合实时月报动态调整。"
 )
 show_insight("monthly", max_bullets=3)
+
+# ============================================================
+# 模块一·附一·B：季节性 · 量价分解 · 动能（v11 新增）
+# ============================================================
+try:
+    _sx = amdf.dropna(subset=["amt25"]).copy() if {"amt25"} <= set(amdf.columns) else pd.DataFrame()
+    if not _sx.empty and _sx["amt25"].sum() > 0:
+        st.markdown("---")
+        st.subheader("🕐 季节性 · 量价分解 · 增长动能（v11）")
+
+        col_sa, col_pv = st.columns(2)
+
+        with col_sa:
+            # 季节性指数：2025 每月占全年比重
+            st.markdown("**📊 2025 月度季节性指数**（各月占全年金额比重；>8.3%=强月）")
+            _sx["share25"] = _sx["amt25"] / _sx["amt25"].sum() * 100
+            _sx["sidx"] = _sx["share25"] / (100 / 12)  # 1=平均
+            fig_sx = go.Figure(go.Bar(
+                x=_sx["m"], y=_sx["sidx"],
+                marker_color=["#2ecc71" if v >= 1.15 else ("#f1c40f" if v >= 0.85 else "#e74c3c")
+                              for v in _sx["sidx"]],
+                text=[f"{v:.2f}" for v in _sx["sidx"]], textposition="outside",
+            ))
+            fig_sx.add_hline(y=1, line_dash="dot", line_color="#34495e",
+                             annotation_text="年均值=1.0")
+            fig_sx.update_layout(template="plotly_white", height=360,
+                                 yaxis_title="季节指数(1=平均)",
+                                 title="旺季/淡月一目了然（绿=强月）")
+            st.plotly_chart(fig_sx, use_container_width=True)
+            strong = _sx[_sx["sidx"] >= 1.15]["m"].tolist()
+            st.caption(f"强月（指数≥1.15）：{('、'.join(strong)) if strong else '无（分布较均匀）'}"
+                       "→ 补货节奏应向强月前置 1 个月倾斜。")
+
+        with col_pv:
+            # 量价分解：金额同比 − 人次同比 = 价效应
+            st.markdown("**⚖️ 量价分解**（金额同比 − 人次同比 = 客单价效应）")
+            pv_rows = []
+            for _, r in _sx.iterrows():
+                if r.get("pax26") and r.get("pax25") and r["pax25"] > 0 and r.get("yoy") is not None:
+                    pax_yoy = (r["pax26"] / r["pax25"] - 1) * 100
+                    pv_rows.append({"m": r["m"], "amt_yoy": r["yoy"], "pax_yoy": pax_yoy,
+                                    "price_effect": r["yoy"] - pax_yoy})
+            pvdf = pd.DataFrame(pv_rows)
+            if not pvdf.empty:
+                fig_pv = go.Figure()
+                fig_pv.add_bar(x=pvdf["m"], y=pvdf["amt_yoy"], name="金额同比%",
+                               marker_color="#3498db")
+                fig_pv.add_bar(x=pvdf["m"], y=pvdf["pax_yoy"], name="人次同比%",
+                               marker_color="#95a5a6")
+                fig_pv.add_scatter(x=pvdf["m"], y=pvdf["price_effect"], name="客单价效应pp",
+                                   mode="lines+markers+text", text=[f"{v:+.1f}" for v in pvdf["price_effect"]],
+                                   textposition="top center", line=dict(color="#e67e22", width=3))
+                fig_pv.update_layout(barmode="group", template="plotly_white", height=360,
+                                     yaxis_title="同比%", title="增长靠流量还是靠客单价？")
+                st.plotly_chart(fig_pv, use_container_width=True)
+                avg_pe = pvdf["price_effect"].mean()
+                st.caption(f"客单价效应均值 {avg_pe:+.1f}pp → "
+                           + ("增长主要由**客单价**拉动（提价/高单价品类）" if avg_pe > 1
+                              else ("增长主要由**客流**拉动（靠人气）" if avg_pe < -1
+                                    else "量价均衡")))
+            else:
+                st.info("月度人次数据不足，无法做量价分解。")
+
+        # 增长动能：滚动 3 个月平均同比
+        st.markdown("**📈 增长动能跟踪**（滚动 3 个月平均同比）")
+        mo = amdf.dropna(subset=["yoy"]).copy()
+        if len(mo) >= 3:
+            mo = mo.sort_values("mo")
+            mo["roll3"] = mo["yoy"].rolling(3).mean()
+            fig_r = go.Figure()
+            fig_r.add_bar(x=mo["m"], y=mo["yoy"], name="单月同比%",
+                          marker_color="#d6eaf8")
+            fig_r.add_scatter(x=mo["m"], y=mo["roll3"], name="3个月滚动均值",
+                              mode="lines+markers", line=dict(color="#c0392b", width=3))
+            fig_r.update_layout(template="plotly_white", height=340,
+                                yaxis_title="同比%",
+                                title="动能曲线：滚动均值持续下行 = 增长在降温（提前调整补货斜率）")
+            st.plotly_chart(fig_r, use_container_width=True)
+except Exception as _e:
+    st.caption(f"（季节性/量价分析跳过：{_e}）")
 
 # ============================================================
 # 模块一·附二：数据诊断与行动建议（DataAnalyticsReporter 增强）

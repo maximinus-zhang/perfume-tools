@@ -22,6 +22,8 @@ v1.6 新增（2026-07-22）：
 """
 
 import streamlit as st
+import numpy as np
+import plotly.graph_objects as go
 from datetime import datetime
 
 st.set_page_config(page_title="免税商情看板", page_icon="📊", layout="wide")
@@ -1540,6 +1542,91 @@ chart_df = chart_df.set_index("store")["sales_h1_est"].sort_values()
 st.bar_chart(chart_df)
 st.caption("柱越高代表按权重分摊出的体量越大；仅为估算分布，非实测排名。")
 show_insight("store_overview", max_bullets=2)
+
+
+# ============================================================
+# 视图三·B：门店效率与竞争格局（估算）—— v2 新增
+# ============================================================
+try:
+    _eff = pd.DataFrame([{
+        "零售商": s["retailer"], "门店": s["store"], "业态": s.get("type"),
+        "销售": float(s["sales_h1_est"] or 0), "客流": float(s["pax_h1_est"] or 0),
+    } for s in stores])
+    if not _eff.empty and _eff["销售"].sum() > 0:
+        st.markdown("---")
+        st.subheader("🏭 门店效率与竞争格局（估算）")
+
+        c_e1, c_e2 = st.columns(2)
+
+        with c_e1:
+            # 零售商集中度（CR3 / HHI）
+            by_r = _eff.groupby("零售商")["销售"].sum().sort_values(ascending=False)
+            tot = by_r.sum()
+            share = by_r / tot
+            cr3 = share.head(3).sum()
+            hhi = float((share ** 2).sum() * 10000)
+            hhi_lbl = "高度集中" if hhi > 2500 else ("中度集中" if hhi > 1500 else "竞争型")
+            fig_cr = go.Figure(go.Bar(
+                x=by_r.index, y=by_r.values,
+                marker_color=["#EF6C00" if i < 3 else "#FFCC80" for i in range(len(by_r))],
+                text=[f"{v:.1f}亿 / {s*100:.0f}%" for v, s in zip(by_r.values, share.values)],
+                textposition="outside",
+            ))
+            fig_cr.update_layout(
+                template="plotly_white", height=420, xaxis_tickangle=-20,
+                yaxis_title="H1 销售估算(亿)",
+                title=f"零售商格局：CR3={cr3:.0%} ｜ HHI={hhi:,.0f}（{hhi_lbl}）",
+            )
+            st.plotly_chart(fig_cr, use_container_width=True)
+
+        with c_e2:
+            # 门店效率散点：销售 vs 客流（单店产出）
+            _eff2 = _eff[_eff["客流"] > 0].copy()
+            _eff2["单客产出(元)"] = _eff2["销售"] / _eff2["客流"] * 10000
+            if not _eff2.empty:
+                fig_scat = go.Figure()
+                for rt, sub in _eff2.groupby("零售商"):
+                    fig_scat.add_scatter(
+                        x=sub["客流"], y=sub["销售"], mode="markers",
+                        name=rt, text=sub["门店"], hovertemplate="%{text}<br>客流 %{x:.0f}万 / 销售 %{y:.1f}亿<extra></extra>",
+                        marker=dict(size=12, opacity=0.8),
+                    )
+                # 平均线：所有门店拟合趋势
+                z = np.polyfit(_eff2["客流"], _eff2["销售"], 1)
+                xs = np.linspace(_eff2["客流"].min(), _eff2["客流"].max(), 50)
+                fig_scat.add_scatter(x=xs, y=np.polyval(z, xs), mode="lines",
+                                     name="效率基准线", line=dict(dash="dot", color="#7f8c8d"))
+                fig_scat.update_layout(
+                    template="plotly_white", height=420,
+                    xaxis_title="客流估算(万)", yaxis_title="销售估算(亿)",
+                    title="门店产出效率：基准线上方=客流转化率高",
+                )
+                st.plotly_chart(fig_scat, use_container_width=True)
+                top_eff = _eff2.sort_values("单客产出(元)", ascending=False).head(5)
+                st.markdown("**单客产出 Top5（元/客）**：" +
+                            " ｜ ".join(f"{r['门店']} {r['单客产出(元)']:,.0f}" for _, r in top_eff.iterrows()))
+
+        # 业态结构对比
+        by_type = _eff.groupby("业态").agg(销售=("销售", "sum"), 门店数=("门店", "count")).reset_index()
+        if len(by_type) > 1:
+            fig_t = go.Figure()
+            fig_t.add_bar(x=by_type["业态"], y=by_type["销售"], name="H1销售估算(亿)",
+                          marker_color="#3498db", text=[f"{v:.1f}" for v in by_type["销售"]],
+                          textposition="outside")
+            fig_t.add_scatter(x=by_type["业态"], y=by_type["门店数"], name="门店数",
+                              mode="lines+markers+text", text=[f"{int(v)}店" for v in by_type["门店数"]],
+                              textposition="top center", yaxis="y2",
+                              line=dict(color="#e67e22", width=2.5))
+            fig_t.update_layout(
+                template="plotly_white", height=360,
+                yaxis=dict(title="销售估算(亿)"),
+                yaxis2=dict(title="门店数", overlaying="y", side="right"),
+                title="业态结构：销售贡献 vs 门店数量（少数业态贡献多数销售？）",
+            )
+            st.plotly_chart(fig_t, use_container_width=True)
+        st.caption("⚠️ 本区块全部基于上方门店估算口径（代理权重分摊），用于格局与效率的**相对比较**，非实测值。")
+except Exception as _e:
+    st.caption(f"（效率/格局分析跳过：{_e}）")
 
 
 # ============================================================

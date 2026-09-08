@@ -13,6 +13,7 @@
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 import folium
 from folium.plugins import GroupedLayerControl, MarkerCluster
 from streamlit_folium import st_folium
@@ -602,6 +603,144 @@ if len(selected_brands) >= 2:
     st.plotly_chart(fig_radar, width='stretch')
 else:
     st.info("ℹ️ 请在左侧选择 **至少 2 个品牌** 进行对比分析")
+
+
+# ============================================================
+# 9.5 🌐 网络结构与集中度分析（v2 新增）
+# ============================================================
+st.markdown("---")
+st.subheader("🌐 门店网络结构与集中度")
+
+# KPI 行
+k1, k2, k3, k4, k5 = st.columns(5)
+n_total = len(df_stores)
+n_prov = df_stores["province"].nunique()
+n_op = df_stores["operator"].nunique()
+n_new = int((df_stores["status"] == "New").sum())
+k1.metric("门店总数", n_total)
+k2.metric("覆盖省级行政区", f"{n_prov} / 34")
+k3.metric("合作运营商", n_op)
+k4.metric("新店/待开", f"{n_new} ({n_new/n_total*100:.0f}%)")
+k5.metric("平均每省门店", f"{n_total/n_prov:.1f}")
+
+c_net1, c_net2 = st.columns(2)
+with c_net1:
+    # 运营商 × 门店类型 矩阵（堆叠条形图）
+    op_type = df_stores.groupby(["operator", "type"]).size().reset_index(name="门店数")
+    fig_ot = px.bar(
+        op_type, x="operator", y="门店数", color="type",
+        category_orders={"type": ["Airport", "DT", "Border", "Cruise"]},
+        color_discrete_map={"Airport": "#1565C0", "DT": "#C62828",
+                            "Border": "#2E7D32", "Cruise": "#6A1B9A"},
+        title="运营商 × 门店类型结构（业态组合画像）",
+        template="plotly_white", text_auto=True,
+    )
+    fig_ot.update_layout(xaxis_tickangle=-35, xaxis_title="", yaxis_title="门店数",
+                         legend_title="类型", height=430)
+    st.plotly_chart(fig_ot, width='stretch')
+
+with c_net2:
+    # 运营商集中度 HHI
+    op_share = df_stores["operator"].value_counts(normalize=True)
+    op_hhi = float((op_share ** 2).sum() * 10000)
+    op_hhi_label = "高度集中" if op_hhi > 2500 else ("中度集中" if op_hhi > 1500 else "竞争型")
+    op_top = df_stores["operator"].value_counts().head(5)
+    fig_oph = go.Figure(go.Bar(
+        x=op_top.index, y=op_top.values,
+        marker_color=["#EF6C00" if i == 0 else "#FFB74D" for i in range(len(op_top))],
+        text=[f"{v}店 / {v/n_total*100:.0f}%" for v in op_top.values],
+        textposition="outside",
+    ))
+    fig_oph.update_layout(
+        template="plotly_white", height=430, xaxis_tickangle=-25,
+        yaxis_title="门店数",
+        title=f"运营商集中度：HHI={op_hhi:,.0f}（{op_hhi_label}）｜Top5 占 {op_top.sum()/n_total*100:.0f}%",
+    )
+    st.plotly_chart(fig_oph, width='stretch')
+
+# 区域 × 类型 透视表（带渐变）
+with st.expander("📋 区域 × 门店类型 透视表（颜色越深门店越多）", expanded=False):
+    pv = df_stores.pivot_table(index="province", columns="type", values="pos",
+                               aggfunc="count", fill_value=0)
+    pv["合计"] = pv.sum(axis=1)
+    pv = pv.sort_values("合计", ascending=False)
+    st.dataframe(
+        pv.style.background_gradient(cmap="Oranges", subset=[c for c in pv.columns if c != "合计"]),
+        use_container_width=True,
+    )
+
+# ============================================================
+# 9.6 🎯 品牌覆盖缺口（白空间）分析（v2 新增）
+# ============================================================
+st.markdown("---")
+st.subheader("🎯 品牌覆盖缺口分析（白空间）")
+st.markdown("对所选品牌，找出**竞争对手已进入、但该品牌尚未覆盖**的省份 = 潜在扩张白空间。"
+            "（覆盖口径 = BRAND_COVERAGE 品牌省份矩阵）")
+
+if selected_brands:
+    union_all = set()
+    for b in all_brands:
+        union_all |= set(BRAND_COVERAGE.get(b, {}).get("provinces", []))
+
+    gap_rows = []
+    for b in selected_brands:
+        own = set(BRAND_COVERAGE.get(b, {}).get("provinces", []))
+        gap = sorted(union_all - own)
+        # 白空间里每个省份有几个竞品在（=竞争热度）
+        gap_heat = {p: sum(1 for x in all_brands if p in BRAND_COVERAGE.get(x, {}).get("provinces", []))
+                    for p in gap}
+        gap_rows.append({
+            "品牌": b,
+            "已覆盖省": len(own),
+            "白空间省": len(gap),
+            "覆盖潜力%": f"{len(own)/len(union_all)*100:.0f}%",
+            "白空间明细": "、".join(f"{p}({gap_heat[p]}家)" for p in gap[:8]) + ("…" if len(gap) > 8 else ""),
+        })
+    st.dataframe(pd.DataFrame(gap_rows), width='stretch', hide_index=True)
+    st.caption("括号内数字 = 该省已有多少个矩阵内品牌（竞争热度）；热度低的白空间优先级更高。")
+
+    # 品牌 × 省份 覆盖矩阵热力图（选中品牌 + 全品牌切换）
+    scope = st.radio("矩阵范围", ["仅所选品牌", "全部品牌"], horizontal=True)
+    matrix_brands = selected_brands if scope == "仅所选品牌" and selected_brands else all_brands
+    provs = sorted(union_all)
+    m = np.array([[1 if p in BRAND_COVERAGE.get(b, {}).get("provinces", []) else 0
+                   for p in provs] for b in matrix_brands], dtype=float)
+    fig_m = go.Figure(go.Heatmap(
+        z=m, x=provs, y=matrix_brands,
+        colorscale=[[0, "#f5f5f5"], [1, "#1565C0"]],
+        showscale=False, xgap=2, ygap=2,
+        hovertemplate="%{y} × %{x}<extra>覆盖</extra>",
+    ))
+    fig_m.update_layout(
+        template="plotly_white",
+        height=max(400, len(matrix_brands) * 26 + 140),
+        title="品牌 × 省份 覆盖矩阵（深蓝=已覆盖）",
+        xaxis_tickangle=-40,
+    )
+    st.plotly_chart(fig_m, use_container_width=True)
+
+    # 两两品牌重合度（Jaccard）
+    if len(selected_brands) >= 2:
+        st.markdown("**品牌间覆盖重合度**（Jaccard = 交集÷并集，越高=网点越重叠=直接竞争）")
+        n = len(selected_brands)
+        jac = np.eye(n)
+        for i in range(n):
+            for j in range(n):
+                if i != j:
+                    si = set(BRAND_COVERAGE.get(selected_brands[i], {}).get("provinces", []))
+                    sj = set(BRAND_COVERAGE.get(selected_brands[j], {}).get("provinces", []))
+                    jac[i][j] = len(si & sj) / len(si | sj) if (si | sj) else 0
+        fig_j = go.Figure(go.Heatmap(
+            z=jac, x=selected_brands, y=selected_brands,
+            colorscale="YlOrRd", zmin=0, zmax=1,
+            text=np.vectorize(lambda v: f"{v:.2f}")(jac), texttemplate="%{text}",
+            colorbar=dict(title="Jaccard"),
+        ))
+        fig_j.update_layout(template="plotly_white", height=max(360, n * 40 + 140),
+                            title="所选品牌覆盖重合度矩阵")
+        st.plotly_chart(fig_j, use_container_width=True)
+else:
+    st.info("ℹ️ 请在左侧选择品牌后查看白空间分析。")
 
 
 # ============================================================

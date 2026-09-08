@@ -28,6 +28,8 @@ import numpy as np
 import warnings
 import base64
 import os
+import plotly.express as px
+import plotly.graph_objects as go
 from utils.newness_crypto import decrypt_data
 from utils.oss_helper import read_kb_excel, kb_available, KB_OSS_KEY_BRAND, KB_LOCAL_BRAND   # 与 NEWNESS 页共用同一加密/密码(Max12345)
 
@@ -230,7 +232,12 @@ total_26 = df_sorted["y26"].sum()
 df_sorted["占大盘%"] = (df_sorted["y26"] / total_26 * 100).round(1)
 
 # ---------- Tab 1: 品牌总盘表现 ----------
-tab1, tab2 = st.tabs(["📊 品牌总盘表现 (2025→2026)", "🌏 市场维度 (海南+机场优先)"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "📊 品牌总盘表现 (2025→2026)",
+    "🌏 市场维度 (海南+机场优先)",
+    "🔥 竞争格局与集中度",
+    "📅 月度节奏与动能",
+])
 
 with tab1:
     st.subheader("① 品牌销售表现总览（2026 YTM 降序）")
@@ -309,6 +316,44 @@ with tab1:
         }).set_index("月份")
         st.line_chart(ts)
 
+    # ⑤ 增长贡献瀑布图：谁在拉动大盘、谁在拖累
+    st.subheader("⑤ 大盘增长贡献分解（瀑布图）")
+    st.markdown("每个品牌对**大盘净增长**（2026−2025）的贡献 = 品牌销售额变化量。"
+                "绿色=拉动增长，红色=拖累大盘；按贡献绝对值排序，只展示主要品牌。")
+
+    _contrib = df_sorted.copy()
+    _contrib["delta"] = _contrib["y26"] - _contrib["y25"]
+    _contrib = _contrib.dropna(subset=["delta"]).sort_values("delta", key=abs, ascending=False)
+    total_delta = _contrib["delta"].sum()
+
+    n_show = min(12, len(_contrib))
+    head = _contrib.head(n_show)
+    others_delta = _contrib.iloc[n_show:]["delta"].sum() if len(_contrib) > n_show else 0
+    if len(_contrib) > n_show:
+        head = pd.concat([head, pd.DataFrame([{
+            "品牌": f"其他{len(_contrib)-n_show}个品牌", "delta": others_delta, "y26": np.nan, "yoy": np.nan}])],
+            ignore_index=True)
+
+    wf_labels = head["品牌"].tolist() + ["**2026 净变化**"]
+    wf_values = head["delta"].tolist() + [total_delta]
+    fig_wf = go.Figure(go.Waterfall(
+        orientation="v",
+        measure=["relative"] * len(head) + ["total"],
+        x=wf_labels, y=wf_values,
+        text=[f"{v:+,.0f}" for v in wf_values],
+        textposition="outside",
+        connector={"line": {"color": "#bdc3c7"}},
+        increasing={"marker": {"color": "#2ecc71"}},
+        decreasing={"marker": {"color": "#e74c3c"}},
+        totals={"marker": {"color": "#34495e"}},
+    ))
+    fig_wf.update_layout(
+        height=460, template="plotly_white",
+        yaxis_title="销售额变化量", xaxis_tickangle=-30,
+        title=f"2025 → 2026 大盘净增长 {total_delta:+,.0f} 的品牌贡献分解",
+    )
+    st.plotly_chart(fig_wf, use_container_width=True)
+
 # ---------- Tab 2: 市场维度 ----------
 with tab2:
     st.subheader("市场结构（海南 + 机场 + 国内有税 优先视角）")
@@ -348,6 +393,214 @@ with tab2:
         pivot = pivot.sort_values("合计", ascending=False)
         st.dataframe(pivot.style.format("{:,.0f}").background_gradient(cmap="Greens"),
                      use_container_width=True)
+
+# ---------- Tab 3: 竞争格局与集中度 ----------
+with tab3:
+    st.subheader("① 市场集中度指标（2025 vs 2026）")
+    st.markdown("**CR3/CR5** = 前 3/5 大品牌合计份额；**HHI** = 各品牌份额平方和 ×10000"
+                "（<1500 竞争型 / 1500–2500 中度集中 / >2500 高度集中）。集中度上升=大盘向头部收敛。")
+
+    def _concentration(vals):
+        s = pd.Series(vals).dropna()
+        s = s[s > 0]
+        tot = s.sum()
+        if tot <= 0 or len(s) == 0:
+            return None
+        share = s / tot
+        return dict(cr3=share.nlargest(3).sum(), cr5=share.nlargest(5).sum(),
+                    cr10=share.nlargest(10).sum(), hhi=(share ** 2).sum() * 10000)
+
+    c25, c26 = _concentration(df["y25"]), _concentration(df["y26"])
+    if c25 and c26:
+        m1, m2, m3, m4 = st.columns(4)
+        m1.metric("CR3 前三品牌份额", f"{c26['cr3']:.1%}", f"{(c26['cr3']-c25['cr3'])*100:+.1f}pp")
+        m2.metric("CR5 前五品牌份额", f"{c26['cr5']:.1%}", f"{(c26['cr5']-c25['cr5'])*100:+.1f}pp")
+        m3.metric("HHI 集中度指数", f"{c26['hhi']:,.0f}",
+                  f"{c26['hhi']-c25['hhi']:+,.0f}",
+                  delta_color="inverse")  # HHI 上升是集中，标红
+        lvl = "高度集中" if c26["hhi"] > 2500 else ("中度集中" if c26["hhi"] > 1500 else "竞争型")
+        m4.metric("2026 格局判定", lvl, f"品牌数 {int((df['y26']>0).sum())}")
+
+    st.markdown("---")
+    st.subheader("② 市场份额变化（谁在抢份额）")
+    st.markdown("份额变化 = 2026 份额 − 2025 份额（百分点 pp）。绿色=份额提升（进攻者），红色=份额下滑（防守者）。")
+
+    sh = df_sorted.copy()
+    tot25, tot26 = sh["y25"].sum(), sh["y26"].sum()
+    sh["share25"] = sh["y25"] / tot25 * 100
+    sh["share26"] = sh["y26"] / tot26 * 100
+    sh["share_delta_pp"] = sh["share26"] - sh["share25"]
+    sh = sh.dropna(subset=["share_delta_pp"]).sort_values("share_delta_pp")
+
+    top_n_share = sh.tail(15)  # 前15个份额变化最大的品牌
+    colors = ["#e74c3c" if v < 0 else "#2ecc71" for v in top_n_share["share_delta_pp"]]
+    fig_sh = go.Figure(go.Bar(
+        x=top_n_share["share_delta_pp"], y=top_n_share["品牌"], orientation="h",
+        marker_color=colors,
+        text=[f"{v:+.2f}pp" for v in top_n_share["share_delta_pp"]],
+        textposition="outside",
+    ))
+    fig_sh.update_layout(height=max(420, len(top_n_share) * 28), template="plotly_white",
+                         xaxis_title="份额变化 (pp)", yaxis_title="")
+    st.plotly_chart(fig_sh, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("③ 品牌销售 Pareto（80/20 检验）")
+    st.markdown("柱=各品牌 2026 销售额（降序），线=累计份额。虚线 80% 线与交叉点"
+                "揭示『几个品牌撑起 80% 大盘』。")
+
+    par = df_sorted.dropna(subset=["y26"]).copy()
+    par = par[par["y26"] > 0]
+    par["cum_share"] = par["y26"].cumsum() / par["y26"].sum() * 100
+    n80 = int((par["cum_share"] < 80).sum()) + 1
+    fig_par = go.Figure()
+    fig_par.add_bar(x=par["品牌"], y=par["y26"], marker_color="#3498db", name="2026 销售额",
+                    text=[f"{v:,.0f}" for v in par["y26"]], textposition="outside")
+    fig_par.add_scatter(x=par["品牌"], y=par["cum_share"], name="累计份额%",
+                        yaxis="y2", mode="lines+markers", line=dict(color="#e67e22", width=2.5))
+    fig_par.add_hline(y=80, line_dash="dot", line_color="#e74c3c", annotation_text="80%",
+                      yref="y2")
+    fig_par.update_layout(
+        template="plotly_white", height=480, xaxis_tickangle=-35,
+        yaxis=dict(title="销售额"),
+        yaxis2=dict(title="累计份额%", overlaying="y", side="right", range=[0, 105]),
+        title=f"前 {n80} 个品牌贡献 80% 大盘（共 {len(par)} 个品牌）",
+    )
+    st.plotly_chart(fig_par, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("④ 增长质量矩阵（规模 × 增速 × 趋势）")
+    st.markdown("在 BCG 基础上加入**近期动能**（4–6月同比 vs 1–3月同比）：气泡大小=2026 销售额，"
+                "颜色=动能变化（绿=二季度在加速，红=在减速）。")
+
+    def _m_growth(brand, months_dict, m_list):
+        vals = [pd.to_numeric(months_dict.get(brand, [None]*12)[MONTHS.index(m)], errors="coerce")
+                if m in MONTHS else None for m in m_list]
+        s = pd.Series(vals, index=m_list, dtype="float64")
+        return s
+
+    qual_rows = []
+    for _, row in df_sorted.iterrows():
+        b = row["品牌"]
+        g_q1 = _m_growth(b, months25, MONTHS[0:3]).sum()
+        g26_q1 = _m_growth(b, months26, MONTHS[0:3]).sum()
+        g_q2 = _m_growth(b, months25, MONTHS[3:6]).sum()
+        g26_q2 = _m_growth(b, months26, MONTHS[3:6]).sum()
+        if g_q1 and g_q1 > 0 and g_q2 and g_q2 > 0 and pd.notna(row["yoy"]):
+            qual_rows.append({
+                "品牌": b, "y26": row["y26"], "yoy": row["yoy"],
+                "g_q1": (g26_q1 / g_q1 - 1) * 100 if g_q1 > 0 else None,
+                "g_q2": (g26_q2 / g_q2 - 1) * 100 if g_q2 > 0 else None,
+            })
+    qdf = pd.DataFrame(qual_rows).dropna()
+    if not qdf.empty:
+        qdf["momentum"] = qdf["g_q2"] - qdf["g_q1"]
+        fig_q = px.scatter(
+            qdf, x="y26", y="yoy", size="y26", color="momentum",
+            color_continuous_scale="RdYlGn", color_continuous_midpoint=0,
+            hover_name="品牌",
+            labels={"y26": "2026 销售额", "yoy": "总增速 YOY", "momentum": "Q2动能-Q1动能"},
+        )
+        fig_q.add_hline(y=qdf["yoy"].median(), line_dash="dot", line_color="#95a5a6")
+        fig_q.add_vline(x=qdf["y26"].median(), line_dash="dot", line_color="#95a5a6")
+        fig_q.update_layout(template="plotly_white", height=520,
+                            title="气泡=2026销售额 ｜ 右上=明星(大且高增) ｜ 颜色绿=Q2在加速")
+        st.plotly_chart(fig_q, use_container_width=True)
+        st.caption(f"⚠️ 动能仅统计 1-6 月可同比的品牌（{len(qdf)} 个）；4-6月为最新已出月份。")
+    else:
+        st.info("当前数据无可比的 Q1/Q2 同期值，无法计算动能矩阵。")
+
+# ---------- Tab 4: 月度节奏与动能 ----------
+with tab4:
+    st.subheader("① 品牌 × 月份 同比热力图（2026 vs 2025 同月）")
+    st.markdown("每格 = 该品牌该月 2026/2025 同比增速。绿=正增长，红=负增长，灰=无同期数据。"
+                "用于快速定位**哪些品牌在哪个月掉队/爆发**。")
+
+    heat_rows = []
+    for _, row in df_sorted.iterrows():
+        b = row["品牌"]
+        r = {"品牌": b}
+        for i, m in enumerate(MONTHS):
+            v25 = pd.to_numeric(months25.get(b, [None]*12)[i], errors="coerce")
+            v26 = pd.to_numeric(months26.get(b, [None]*12)[i], errors="coerce")
+            if pd.notna(v25) and pd.notna(v26) and v25 > 0:
+                r[m] = (v26 / v25 - 1) * 100
+            else:
+                r[m] = np.nan
+        heat_rows.append(r)
+    hdf = pd.DataFrame(heat_rows).set_index("品牌")
+
+    z = hdf.values
+    fig_h = go.Figure(go.Heatmap(
+        z=z, x=hdf.columns.tolist(), y=hdf.index.tolist(),
+        colorscale="RdYlGn", zmid=0,
+        text=np.where(np.isnan(z), "", np.vectorize(lambda v: f"{v:+.0f}%" if not np.isnan(v) else "")(z)),
+        texttemplate="%{text}", textfont=dict(size=9),
+        colorbar=dict(title="同比%"),
+        xgap=1, ygap=1,
+    ))
+    fig_h.update_layout(template="plotly_white", height=max(560, len(hdf) * 22 + 160),
+                        title="逐月同比增速热力图（按 2026 销售额降序）")
+    st.plotly_chart(fig_h, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("② 大盘月度节奏（2025 vs 2026 + 同比）")
+    mkt_ts = pd.DataFrame({
+        "月份": MONTHS,
+        "2025": [sum(pd.to_numeric(months25.get(b, [0]*12)[i], errors="coerce") or 0
+                     for b in df_sorted["品牌"]) for i in range(12)],
+        "2026": [sum(pd.to_numeric(months26.get(b, [0]*12)[i], errors="coerce") or 0
+                     for b in df_sorted["品牌"]) for i in range(12)],
+    })
+    mkt_ts["同比%"] = np.where(mkt_ts["2025"] > 0,
+                                (mkt_ts["2026"] / mkt_ts["2025"] - 1) * 100, np.nan)
+    c_a, c_b = st.columns([3, 2])
+    with c_a:
+        fig_m = go.Figure()
+        fig_m.add_bar(x=mkt_ts["月份"], y=mkt_ts["2025"], name="2025", marker_color="#95a5a6")
+        fig_m.add_bar(x=mkt_ts["月份"], y=mkt_ts["2026"], name="2026", marker_color="#3498db")
+        fig_m.update_layout(barmode="group", template="plotly_white", height=380,
+                            yaxis_title="大盘销售额", title="大盘月度销售额对比")
+        st.plotly_chart(fig_m, use_container_width=True)
+    with c_b:
+        fig_g = go.Figure(go.Bar(
+            x=mkt_ts["月份"], y=mkt_ts["同比%"],
+            marker_color=["#2ecc71" if (v is not np.nan and v >= 0) else "#e74c3c"
+                          for v in mkt_ts["同比%"]],
+            text=[f"{v:+.1f}%" if not np.isnan(v) else "" for v in mkt_ts["同比%"]],
+            textposition="outside",
+        ))
+        fig_g.update_layout(template="plotly_white", height=380,
+                            yaxis_title="同比%", title="大盘月度同比")
+        st.plotly_chart(fig_g, use_container_width=True)
+
+    st.markdown("---")
+    st.subheader("③ 集中度逐月演变（CR5 走势）")
+    st.markdown("逐月计算前 5 大品牌份额合计：曲线**上升**=月份越近越向头部集中，"
+                "**下降**=长尾品牌在后期发力。")
+    cr5_series = []
+    for i, m in enumerate(MONTHS):
+        vals = {}
+        for b in df_sorted["品牌"]:
+            v25 = pd.to_numeric(months25.get(b, [0]*12)[i], errors="coerce") or 0
+            v26 = pd.to_numeric(months26.get(b, [0]*12)[i], errors="coerce") or 0
+            vals[b] = v25 + v26  # 合并两年口径看结构
+        s = pd.Series(vals)
+        s = s[s > 0]
+        if len(s) >= 5:
+            cr5_series.append({"月份": m, "CR5%": s.nlargest(5).sum() / s.sum() * 100})
+        else:
+            cr5_series.append({"月份": m, "CR5%": np.nan})
+    cr5df = pd.DataFrame(cr5_series)
+    fig_cr5 = go.Figure(go.Scatter(
+        x=cr5df["月份"], y=cr5df["CR5%"], mode="lines+markers",
+        line=dict(color="#8e44ad", width=3),
+        text=[f"{v:.1f}%" if not np.isnan(v) else "" for v in cr5df["CR5%"]],
+    ))
+    fig_cr5.update_layout(template="plotly_white", height=340,
+                          yaxis_title="CR5 %", yaxis_range=[0, 100],
+                          title="前五大品牌份额合计（2025+2026 合并口径）")
+    st.plotly_chart(fig_cr5, use_container_width=True)
 
 # ============================================================
 # 3) 页脚：数据口径说明
