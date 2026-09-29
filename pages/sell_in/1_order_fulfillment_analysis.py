@@ -45,9 +45,56 @@ def safe_val(ws, r, c):
         return None
 
 
+def pick_inventory_sheet(xls, path_or_buf):
+    """智能挑选库存 sheet：优先「⑤指定仓库分布」，其次「④SKU仓库分布」，
+    再退化为任何含 orig_code/sap_code 表头的 sheet。返回 sheet 名或 None。"""
+    names = list(xls.sheet_names)
+    # 1) 精确/模糊优先
+    for key in ["⑤指定仓库分布", "5指定仓库分布", "指定仓库分布"]:
+        for sn in names:
+            if key in str(sn):
+                return sn
+    # 2) 退化为 ④SKU仓库分布（含全部仓库列，是可借货仓的超集，逻辑同样可用）
+    for key in ["④SKU仓库分布", "4SKU仓库分布", "SKU仓库分布"]:
+        for sn in names:
+            if key in str(sn):
+                return sn
+    # 3) 最后：扫描每个 sheet 表头，含 orig_code 或 sap_code 的即可用
+    for sn in names:
+        try:
+            head = pd.read_excel(path_or_buf, sheet_name=sn, nrows=0, engine='openpyxl')
+            cols = [str(c) for c in head.columns]
+            if any(('orig_code' in c) or ('sap_code' in c) for c in cols):
+                return sn
+        except Exception:
+            continue
+    return None
+
+
 def load_inventory(uploaded_file):
-    """从上传的库存文件加载⑤指定仓库分布sheet"""
-    df = pd.read_excel(uploaded_file, sheet_name="⑤指定仓库分布", engine='openpyxl')
+    """从上传的库存文件加载仓库分布 sheet（自动适配 ⑤指定仓库分布 / ④SKU仓库分布）"""
+    # 读取全部 sheet 名
+    raw = uploaded_file.getvalue() if hasattr(uploaded_file, 'getvalue') else None
+    src = io.BytesIO(raw) if raw is not None else uploaded_file
+    try:
+        xls = pd.ExcelFile(src, engine='openpyxl')
+    except Exception:
+        src = io.BytesIO(raw) if raw is not None else uploaded_file
+        xls = pd.ExcelFile(src, engine='openpyxl')
+
+    sheet_name = pick_inventory_sheet(xls, src)
+    if sheet_name is None:
+        raise ValueError(
+            "库存文件中未找到可用 sheet（需含「⑤指定仓库分布」或「④SKU仓库分布」）。"
+            "当前 sheet：" + "、".join(str(s) for s in xls.sheet_names)
+        )
+
+    # 从干净的 buffer 重新读一次数据
+    if raw is not None:
+        src2 = io.BytesIO(raw)
+    else:
+        src2 = uploaded_file
+    df = pd.read_excel(src2, sheet_name=sheet_name, engine='openpyxl')
     cols = list(df.columns)
     
     # 构建仓库代码 → 实际列名映射
@@ -96,7 +143,7 @@ def load_inventory(uploaded_file):
                     inventory[cleaned][wh] += v
             except: pass
     
-    return inventory, tr_col, len(df)
+    return inventory, tr_col, len(df), sheet_name
 
 
 def calculate_fulfillment(order_qty, inv_record, tr_col):
@@ -396,7 +443,7 @@ with col1:
 
 with col2:
     st.subheader("📦 上传库存表")
-    st.caption("需包含「⑤指定仓库分布」sheet")
+    st.caption("需包含「⑤指定仓库分布」或「④SKU仓库分布」sheet")
     inventory_file = st.file_uploader(
         "选择文件",
         type=['xlsx'],
@@ -423,9 +470,9 @@ if execute_btn:
         try:
             # 1. 加载库存
             with st.spinner("正在加载库存数据..."):
-                inventory, tr_col, row_count = load_inventory(inventory_file)
+                inventory, tr_col, row_count, inv_sheet = load_inventory(inventory_file)
             
-            status_box.success(f"✅ 库存加载完成：共 {row_count} 行数据，{len(inventory)} 个唯一 SKU")
+            status_box.success(f"✅ 库存加载完成：共 {row_count} 行数据，{len(inventory)} 个唯一 SKU（数据源：{inv_sheet}）")
             
             # 创建临时目录
             with tempfile.TemporaryDirectory() as tmpdir:
@@ -559,7 +606,7 @@ with st.expander("📖 使用说明"):
     st.markdown("""
     ### 操作步骤
     1. **上传订单文件** — 客户订单 Excel，或包含多个订单的 ZIP 压缩包
-    2. **上传库存表** — HK库存日报（需含「⑤指定仓库分布」sheet）
+    2. **上传库存表** — HK库存日报（需含「⑤指定仓库分布」或「④SKU仓库分布」sheet，自动识别）
     3. **点击执行** — 自动匹配 SKU，计算 TR 总库存 + 可借货仓满足情况
     4. **下载结果** — ZIP 包内含所有带 `_满足率` 后缀的订单文件
     
