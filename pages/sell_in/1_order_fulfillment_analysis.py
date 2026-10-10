@@ -116,25 +116,38 @@ def load_inventory(uploaded_file):
         tr_col = 'TR总库存'
     
     # 构建索引
+    # 2026-10-10 新增：PB 订单用 EAN 条码下单 → 需建「条码 → SKU」索引。
+    # ⚠️ 已知大坑：一个条码可能对应多个货号（源数据约 1500+ 个，不同规格共用条码），
+    #    所以条码聚合记录的各仓库存 = 该条码命中的所有 SKU 行之和，绝不只取一行。
+    barcode_col = next((c for c in cols if str(c).strip() == '条码'), None)
+    barcode_skus = {}
+
     inventory = {}
     for _, row in df.iterrows():
         code = str(row.get('orig_code', '') or row.get('sap_code', '') or '').strip()
         if not code: continue
-        
+
         cleaned = clean_code(code)
         if cleaned not in inventory:
             inventory[cleaned] = {wh: 0 for wh in BORROWABLE_WH}
             if tr_col:
                 inventory[cleaned]['TR总库存'] = 0
             inventory[cleaned]['_orig_codes'] = set()
-        
+
         inventory[cleaned]['_orig_codes'].add(code)
-        
+
+        # 收集 条码 -> SKU 归属
+        if barcode_col is not None:
+            bc = row.get(barcode_col)
+            bcs = str(bc).strip() if bc is not None else ''
+            if bcs and bcs.lower() != 'nan':
+                barcode_skus.setdefault(clean_code(bcs), set()).add(cleaned)
+
         if tr_col:
             try:
                 inventory[cleaned]['TR总库存'] += float(row.get(tr_col, 0) or 0)
             except: pass
-        
+
         for wh in BORROWABLE_WH:
             actual_col = wh_col_map.get(wh, wh)
             try:
@@ -142,7 +155,27 @@ def load_inventory(uploaded_file):
                 if v > 0:
                     inventory[cleaned][wh] += v
             except: pass
-    
+
+    # 把条码聚合成可直接查询的库存记录（key=条码），与货号记录并存
+    if barcode_skus:
+        for bc, skus in barcode_skus.items():
+            if bc in inventory:   # 该串恰好与某货号重复，跳过防覆盖
+                continue
+            agg = {wh: 0 for wh in BORROWABLE_WH}
+            if tr_col:
+                agg['TR总库存'] = 0
+            agg['_orig_codes'] = set()
+            for s in skus:
+                rec = inventory.get(s)
+                if not rec:
+                    continue
+                for wh in BORROWABLE_WH:
+                    agg[wh] += rec.get(wh, 0)
+                if tr_col:
+                    agg['TR总库存'] += rec.get('TR总库存', 0)
+                agg['_orig_codes'] |= rec.get('_orig_codes', set())
+            inventory[bc] = agg
+
     return inventory, tr_col, len(df), sheet_name
 
 
@@ -255,6 +288,36 @@ def get_sheet_order_data(ws, sn):
                 except: pass
             if data: return data
     
+    # PB 订单格式（2026-10-10 新增）：r1 有「EAN」列 + 数量列（如「HTDF 确认数量」）
+    # 数据行：EAN=13位条码，数量列为含「确认数量」或 qty 的列（排除金额/合计列）
+    if "ean" in r1_vals:
+        cc = r1_vals.get("ean")
+        cc2 = r1_vals.get("ean 2")   # 第二条码，兜底
+        qc = None
+        for key, c in sorted(r1_vals.items(), key=lambda kv: kv[1]):
+            s = key.lower()
+            if c <= cc:
+                continue
+            if ('确认数量' in key) or ('qty' in s and all(x not in s for x in ('amount', '金额', 'total', '金额'))):
+                qc = c
+                break
+        if cc and qc:
+            data = []
+            for r in range(2, ws.max_row + 1):
+                cv = safe_val(ws, r, cc)
+                if (cv is None or str(cv).strip() == '') and cc2:
+                    cv = safe_val(ws, r, cc2)
+                if cv is None: continue
+                cs = str(cv).strip()
+                if not cs or len(cs) < 3: continue
+                if cs.lower() in ('total', 'subtotal', '合计'): continue
+                qv = safe_val(ws, r, qc)
+                try:
+                    q = float(str(qv).strip()) if qv is not None else 0
+                    if q > 0: data.append((r, cs, int(q)))
+                except Exception: pass
+            if data: return data
+
     # DFS 格式
     r1_keys = {str(safe_val(ws, 1, c) or '').strip().lower(): c for c in range(1, min(ws.max_column + 1, 50))}
     

@@ -3,7 +3,7 @@ chcp 65001 >nul
 title "Perfume Supply Chain - Push and Start"
 color 0A
 
-cd /d "C:\Users\Maximinuszhang\Desktop\PYTHON\perfume-tools-main"
+cd /d "C:\Users\Maximinuszhang\Desktop\WorkBuddy\PYTHON\perfume-tools-main"
 
 :: 关闭残留的旧 Streamlit 进程（8501~8503），避免双开导致出现两个页面 / 两个窗口
 echo 正在清理可能残留的旧 Streamlit 进程...
